@@ -5,8 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="referrer" content="no-referrer">
 <title>GestoCatalog</title>
-<link rel="icon" type="image/png" href="./icon.png?v=1.17.0">
-<link rel="apple-touch-icon" sizes="180x180" href="./icon.png?v=1.17.0">
+<link rel="icon" type="image/png" href="./icon.png?v=1.18.0">
+<link rel="apple-touch-icon" sizes="180x180" href="./icon.png?v=1.18.0">
 <style>:root{color-scheme:light;--bg:#f7f8fd;--tx:#28377e;--mu:#566598;--ln:#303f91;--surface:#fff;--soft:#f0f2fc;--border:#d4daf1;--field:#b6bfdf;--on:#fff;--red:#b42318;--green:#17734a}
 :root[data-theme=dark]{color-scheme:dark;--bg:#10152c;--tx:#e5e9ff;--mu:#adb8e5;--ln:#a1afff;--surface:#1b2447;--soft:#232f59;--border:#425080;--field:#6371a0;--on:#10152c;--red:#ff9992;--green:#84dbab}
 *{box-sizing:border-box}
@@ -199,6 +199,20 @@ img,video,canvas{max-width:100%;height:auto}
 .purchase-check input{width:auto;min-height:0}
 .purchase-head{width:100%;flex-direction:column;align-items:flex-start;gap:2px;border:0;background:transparent;padding:0;text-align:left}
 .purchase-head:hover{background:transparent}
+.article-row{display:grid;grid-template-columns:auto minmax(0,1fr) auto auto;align-items:center;gap:6px;border-top:1px solid var(--border);padding:4px 0}
+.article-row.in-draft{padding-inline:6px;border-radius:8px}
+.article-select{width:20px;min-height:20px;margin:0 6px}
+.article-open{display:block;min-width:0;justify-content:flex-start;border:0;background:transparent;padding:8px 4px;text-align:left;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-weight:400}
+.article-open:hover{background:var(--soft)}
+.article-open .meta{font-size:14px}
+.icon-button{min-width:0;width:40px;min-height:40px;padding:0}
+.icon-button svg{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.icon-button.remove{border-color:var(--red)}
+.icon-button:disabled{opacity:.35}
+.bulk-bar{border:1px solid var(--main-border,var(--border));background:var(--soft);border-radius:12px;padding:12px;margin:10px 0}
+.bulk-bar .actions{margin:8px 0}
+.bulk-bar form{margin-top:8px;align-items:end}
+.bulk-submit{display:flex;align-items:flex-end}
 
 .worker-profiles .worker-profile-item{border-top:1px solid var(--border);padding:10px 0}
 .worker-profile-item>summary,.worker-profile-inactive>summary{cursor:pointer;min-height:34px;display:flex;align-items:center;justify-content:space-between;gap:12px}
@@ -233,7 +247,7 @@ img,video,canvas{max-width:100%;height:auto}
 <body>
 <main>
 <header class="topbar">
-  <div class="brand"><h1>GestoCatalog</h1><div class="meta version">Versió 1.17.0<span id="sync-state" role="status"></span></div></div>
+  <div class="brand"><h1>GestoCatalog</h1><div class="meta version">Versió 1.18.0<span id="sync-state" role="status"></span></div></div>
   <div class="top-actions">
     <div class="menu-anchor">
       <button id="menu-toggle" type="button" aria-label="Menú" aria-expanded="false" aria-controls="menu-panel" hidden><span aria-hidden="true">☰</span><span class="top-action-label" aria-hidden="true">Menú</span></button>
@@ -767,7 +781,7 @@ async function connectNexaMar(email, password, apiKey) {
 
 function mountApp(request, initialData) {
 const pendingUnit = 'pending-supplier-unit';
-const sections = {order:'Nova comanda', history:'Historial de comandes', purchases:'Albarans', articles:'Eines del catàleg', suppliers:'Proveïdors', categories:'Categories', units:'Unitats'};
+const sections = {order:'Nova comanda', purchases:'Albarans', history:'Historial de comandes', articles:'Eines del catàleg', suppliers:'Proveïdors', categories:'Categories', units:'Unitats'};
 const content = document.querySelector('#content');
 const status = document.querySelector('#status');
 const tabs = document.querySelector('#tabs');
@@ -798,7 +812,8 @@ document.addEventListener('keydown',event => {
 const dateFormat = new Intl.DateTimeFormat('ca-ES',{dateStyle:'medium',timeStyle:'short',timeZone:'Europe/Madrid'});
 const quantityFormat = new Intl.NumberFormat('ca-ES',{maximumSignificantDigits:15});
 let data;
-let section = 'order';
+// La pantalla inicial és la lectura d'albarans.
+let section = 'purchases';
 let edit = '';
 let categoryFilter = '';
 let supplierFilter = '';
@@ -919,7 +934,8 @@ function catalog() {
     '<div class="actions"><button class="primary">Desa</button>'+(current ? '<button type="button" data-cancel>Cancel·la</button>' : '')+'</div></form></article>')+
     (isArticle ? pdfImportCard() : '')+
     '<article class="card"><h2>'+{suppliers:'Proveïdors registrats',articles:'Articles registrats',units:'Unitats registrades',categories:'Categories registrades'}[section]+'</h2>'+filters+(isArticle ?
-      '<div class="actions catalog-management"><button type="button" id="article-archive-view" aria-pressed="'+archivedArticles+'">'+(archivedArticles ? 'Mostra els articles actius' : 'Mostra els arxivats')+'</button></div>'+
+      '<div class="actions catalog-management"><button type="button" id="article-archive-view" aria-pressed="'+archivedArticles+'">'+(archivedArticles ? 'Mostra els articles actius' : 'Mostra els arxivats')+'</button>'+
+      '<button type="button" id="select-visible-articles">Marca tots els que es veuen</button></div>'+
       '<div id="article-merge-controls">'+articleMergeControls()+'</div>' : '')+'<div id="catalog-rows">'+
     catalogRows()+'</div></article>';
 }
@@ -1082,13 +1098,42 @@ function draftArticleIds() {
 
 const draftBadge = '<span class="draft-badge">✓ A la comanda</span>';
 
+const archiveIcon = '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="5" rx="1"/><path d="M5 9v10a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V9"/><path d="M10 13h4"/></svg>';
+const restoreIcon = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12a8 8 0 1 0 2.3-5.6"/><path d="M4 4v5h5"/></svg>';
+const trashIcon = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16"/><path d="M9 7V4h6v3"/><path d="M6 7l1 13h10l1-13"/><path d="M10 11v6M14 11v6"/></svg>';
+
+// Accions per als articles marcats: arxivar/restaurar, eliminar, assignar proveïdor i fusionar.
 function articleMergeControls() {
   const selected = data.articles.filter(article => mergeSelection.has(article.id));
   if (!selected.length) return '';
-  return '<form id="merge-articles" class="item"><div class="grid"><label>Article que es conservarà<select name="target" required>'+
-    options(selected,'','Tria l’article principal')+'</select></label></div>'+
-    '<div class="actions"><button class="primary"'+(selected.length < 2 ? ' disabled' : '')+'>Fusiona '+selected.length+' articles</button>'+
-    '<button type="button" id="clear-article-merge">Desmarca tots</button></div></form>';
+  const units = data.units.filter(unit => unit.id !== pendingUnit);
+  return '<div class="bulk-bar"><strong>'+selected.length+(selected.length === 1 ? ' article marcat' : ' articles marcats')+'</strong>'+
+    '<div class="actions"><button type="button" data-bulk="archive">'+(archivedArticles ? 'Restaura' : 'Arxiva')+'</button>'+
+    '<button type="button" class="remove" data-bulk="delete">Elimina</button>'+
+    '<button type="button" id="clear-article-merge">Desmarca tots</button></div>'+
+    '<form id="bulk-supplier" class="grid"><label>Assigna un proveïdor<select name="supplier" required>'+options(data.suppliers,'','Tria un proveïdor')+'</select></label>'+
+    '<label>Unitat de compra<select name="unit">'+options(units,'','La de cada article')+'</select></label>'+
+    '<div class="bulk-submit"><button>Assigna</button></div></form>'+
+    (selected.length > 1 ? '<form id="merge-articles" class="grid"><label>Fusiona’ls en un sol article<select name="target" required>'+
+      options(selected,'','Tria l’article que es conservarà')+'</select></label><div class="bulk-submit"><button>Fusiona '+selected.length+' articles</button></div></form>' : '')+
+    '</div>';
+}
+
+async function runBulk(payloads, button, describe) {
+  if (busy) return;
+  busy = true;
+  button.disabled = true;
+  setSync('Desant…');
+  let done = 0;
+  const failed = [];
+  for (const [name,payload] of payloads) {
+    try { await api(payload); done += 1; } catch { failed.push(name); }
+  }
+  try { data = await api(); } catch { /* es manté la vista anterior */ }
+  busy = false;
+  setSync(readyStatus);
+  render();
+  notify(describe(done)+(failed.length ? ' No s’ha pogut fer amb: '+failed.join(', ')+'.' : ''),failed.length > 0);
 }
 
 function catalogRows() {
@@ -1114,6 +1159,16 @@ function catalogRows() {
         '<button type="button" class="remove" data-delete-article="'+escape(item.id)+'">Elimina</button>') : '';
     const select = isArticle ? '<label class="article-merge-choice"><input type="checkbox" data-merge-article="'+escape(item.id)+'"'+
       (mergeSelection.has(item.id) ? ' checked' : '')+' aria-label="Selecciona '+escape(item.name)+' per fusionar"> Fusiona</label>' : '';
+    if (isArticle) {
+      const used = inDraft || data.lines.some(line => line.article_id === item.id);
+      const full = item.name+(detail ? ' · '+detail : '');
+      return '<div class="article-row'+(inDraft ? ' in-draft' : '')+'">'+
+        '<input type="checkbox" class="article-select" data-merge-article="'+escape(item.id)+'"'+(mergeSelection.has(item.id) ? ' checked' : '')+' aria-label="Selecciona '+escape(item.name)+'">'+
+        '<button type="button" class="article-open" data-article-sheet="'+escape(item.id)+'" data-from-tools title="'+escape(full)+'">'+
+        '<strong>'+escape(item.name)+'</strong>'+(detail ? '<span class="meta"> · '+escape(detail)+'</span>' : '')+'</button>'+
+        '<button type="button" class="icon-button" data-archive-article="'+escape(item.id)+'" title="'+(item.archived ? 'Restaura' : 'Arxiva')+'" aria-label="'+(item.archived ? 'Restaura ' : 'Arxiva ')+escape(item.name)+'">'+(item.archived ? restoreIcon : archiveIcon)+'</button>'+
+        '<button type="button" class="icon-button remove" data-delete-article="'+escape(item.id)+'"'+(used ? ' disabled title="No es pot eliminar: és en una comanda. El pots arxivar."' : ' title="Elimina"')+' aria-label="Elimina '+escape(item.name)+'">'+trashIcon+'</button></div>';
+    }
     return '<div class="item'+(inDraft ? ' in-draft' : '')+'"><div class="row"><div><strong>'+escape(item.name)+'</strong>'+
       (inDraft ? draftBadge : '')+(detail ? '<div class="meta">'+escape(detail)+'</div>' : '')+'</div><div class="actions">'+order+browse+
       (isArticle ? '<button type="button" data-article-sheet="'+escape(item.id)+'">Fitxa</button>' : '<button data-edit="'+escape(item.id)+'">Edita</button>')+articleActions+select+'</div></div>'+
@@ -1233,8 +1288,10 @@ function orderListRow(article,line,index) {
 
 // Fitxa de l'article (llapis): línia de la comanda, dades de l'article i proveïdors, tot en un sol diàleg.
 let sheetId = '';
-function openOrderEditor(article, index) {
+let sheetFromTools = false;
+function openOrderEditor(article, index, fromTools = false) {
   if (!article) return;
+  sheetFromTools = fromTools;
   sheetId = article.id;
   edit = article.id;
   let dialog = document.querySelector('#order-dialog');
@@ -1277,7 +1334,7 @@ function articleSheet(article, index) {
 '</div></form>'
     : '<p class="meta">Per demanar-lo, afegeix-li un proveïdor a sota.</p>';
   return '<div class="sheet-head"><h2 id="order-dialog-title">'+name+'</h2><button type="button" id="close-order-dialog" aria-label="Tanca">✕</button></div>'+
-    '<section class="sheet-part"><h3>A la comanda</h3>'+orderPart+'</section>'+
+    (sheetFromTools ? '' : '<section class="sheet-part"><h3>A la comanda</h3>'+orderPart+'</section>')+
     '<section class="sheet-part"><h3>Fitxa de l’article</h3><form id="article-sheet"><div class="grid">'+
       '<label>Nom<input name="name" required maxlength="120" value="'+name+'"></label>'+
       '<label>Categoria<select name="category">'+options(data.categories,article.category_id,'Sense categoria')+'</select></label>'+
@@ -1732,6 +1789,9 @@ document.addEventListener('click',async event => {
     addingArticle = '';
     render();
     document.querySelector('#article-archive-view').focus();
+  } else if (button.id === 'select-visible-articles') {
+    content.querySelectorAll('[data-merge-article]').forEach(input => mergeSelection.add(input.dataset.mergeArticle));
+    render();
   } else if (button.id === 'clear-article-merge') {
     mergeSelection.clear();
     render();
@@ -1781,8 +1841,24 @@ document.addEventListener('click',async event => {
   } else if (target.purchase) {
     openPurchase = openPurchase === target.purchase ? '' : target.purchase;
     render();
+  } else if (target.bulk) {
+    const selected = data.articles.filter(article => mergeSelection.has(article.id));
+    if (!selected.length) return;
+    if (target.bulk === 'delete') {
+      if (!window.confirm('Vols eliminar '+selected.length+(selected.length === 1 ? ' article' : ' articles')+' del catàleg? Els que es facin servir en comandes, albarans o a GestoStock no s’eliminaran.')) return;
+      await runBulk(selected.map(article => [article.name,{action:'deleteArticle',id:article.id}]),button,done => {
+        mergeSelection.clear();
+        return done+(done === 1 ? ' article eliminat.' : ' articles eliminats.');
+      });
+    } else {
+      const archived = !archivedArticles;
+      await runBulk(selected.map(article => [article.name,{action:'archiveArticle',id:article.id,archived}]),button,done => {
+        mergeSelection.clear();
+        return done+(done === 1 ? ' article ' : ' articles ')+(archived ? 'arxivats.' : 'restaurats.');
+      });
+    }
   } else if (target.articleSheet) {
-    openOrderEditor(byId('articles',target.articleSheet),'');
+    openOrderEditor(byId('articles',target.articleSheet),'',Object.hasOwn(target,'fromTools'));
   } else if (Object.hasOwn(target,'orderEditor')) {
     openOrderEditor(byId('articles',target.orderEditor),target.orderIndex);
   } else if (button.id === 'close-order-dialog') {
@@ -2004,6 +2080,14 @@ document.addEventListener('submit',async event => {
     await readPurchase(form,event.submitter);
   } else if (form.id === 'purchase-review') {
     await savePurchaseReview(form,event.submitter);
+  } else if (form.id === 'bulk-supplier') {
+    const selected = data.articles.filter(article => mergeSelection.has(article.id));
+    const supplier = byId('suppliers',values.supplier);
+    if (!supplier || !selected.length) return;
+    const missing = selected.filter(article => !values.unit && !article.unit_id);
+    if (missing.length) { notify('Tria una unitat de compra: '+missing.map(article => article.name).join(', ')+' no en té.',true); return; }
+    await runBulk(selected.map(article => [article.name,{action:'offer',article:article.id,supplier:supplier.id,unit:values.unit || article.unit_id}]),event.submitter,
+      done => supplier.name+' assignat a '+done+(done === 1 ? ' article.' : ' articles.'));
   } else if (form.id === 'article-sheet') {
     await save({...values,action:'articles',id:sheetId},null,event.submitter,()=>'Fitxa desada.');
   } else if (form.id === 'offer') {
