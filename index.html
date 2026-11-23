@@ -5,8 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="referrer" content="no-referrer">
 <title>GestoCatalog</title>
-<link rel="icon" type="image/png" href="./icon.png?v=1.18.0">
-<link rel="apple-touch-icon" sizes="180x180" href="./icon.png?v=1.18.0">
+<link rel="icon" type="image/png" href="./icon.png?v=1.19.0">
+<link rel="apple-touch-icon" sizes="180x180" href="./icon.png?v=1.19.0">
 <style>:root{color-scheme:light;--bg:#f7f8fd;--tx:#28377e;--mu:#566598;--ln:#303f91;--surface:#fff;--soft:#f0f2fc;--border:#d4daf1;--field:#b6bfdf;--on:#fff;--red:#b42318;--green:#17734a}
 :root[data-theme=dark]{color-scheme:dark;--bg:#10152c;--tx:#e5e9ff;--mu:#adb8e5;--ln:#a1afff;--surface:#1b2447;--soft:#232f59;--border:#425080;--field:#6371a0;--on:#10152c;--red:#ff9992;--green:#84dbab}
 *{box-sizing:border-box}
@@ -247,7 +247,7 @@ img,video,canvas{max-width:100%;height:auto}
 <body>
 <main>
 <header class="topbar">
-  <div class="brand"><h1>GestoCatalog</h1><div class="meta version">Versió 1.18.0<span id="sync-state" role="status"></span></div></div>
+  <div class="brand"><h1>GestoCatalog</h1><div class="meta version">Versió 1.19.0<span id="sync-state" role="status"></span></div></div>
   <div class="top-actions">
     <div class="menu-anchor">
       <button id="menu-toggle" type="button" aria-label="Menú" aria-expanded="false" aria-controls="menu-panel" hidden><span aria-hidden="true">☰</span><span class="top-action-label" aria-hidden="true">Menú</span></button>
@@ -913,25 +913,53 @@ async function save(payload, done, button, success = () => 'Canvis desats.', aft
   }
 }
 
-function catalog() {
-  const current = byId(section,edit);
+// Camps de la fitxa d'un proveïdor, una unitat o una categoria (per crear-ne o editar-ne).
+function catalogFields(current) {
   const isSupplier = section === 'suppliers';
-  const title = current ? 'Edita ' + current.name : {suppliers:'Nou proveïdor',articles:'Nou article',units:'Nova unitat',categories:'Nova categoria'}[section];
+  return '<div class="grid">'+
+    '<label>Nom<input name="name" required maxlength="120" value="'+escape(current?.name)+'"></label>'+
+    (section === 'units' ? '<label>Nom en singular<input name="singular" maxlength="120" placeholder="'+escape(current ? guessSingular(current.name) : 'p. ex. caixa')+'" value="'+escape(current?.singular)+'"></label>' : '')+
+    (isSupplier ? '<label>WhatsApp amb prefix internacional<input name="phone" type="tel" placeholder="+34 600 000 000" value="'+(current?.phone ? '+'+escape(current.phone) : '')+'"></label>' : '')+
+    (isSupplier ? '<label>Nom del comercial<input name="contact" maxlength="120" value="'+escape(current?.contact)+'"></label>' : '')+
+    '</div>'+
+    (section === 'units' ? '<p class="meta">El singular es fa servir al missatge del proveïdor quan en demanes 1. Si el deixes buit, es dedueix del nom.</p>' : '')+
+    (isSupplier ? contactControls()+'<label>Missatge de WhatsApp<textarea name="messageTemplate" maxlength="1000" rows="4" placeholder="Bon dia, {comercial}! Us voldríem fer aquesta comanda:">'+escape(current?.message_template)+'</textarea></label>'+
+      '<p class="meta">Pots fer servir <code>{comercial}</code>, <code>{proveidor}</code> i <code>{articles}</code>. Si deixes el missatge buit, s’utilitzarà el text per defecte.</p>' : '');
+}
+
+// Llapis de proveïdors, unitats i categories: la fitxa s'edita en un diàleg, amb els botons a baix.
+function openCatalogEditor(item) {
+  if (!item) return;
+  let dialog = document.querySelector('#order-dialog');
+  if (!dialog) {
+    dialog = document.createElement('dialog');
+    dialog.id = 'order-dialog';
+    dialog.setAttribute('aria-labelledby','order-dialog-title');
+    dialog.addEventListener('close',() => { sheetId = ''; });
+    document.querySelector('#workspace').append(dialog);
+  }
+  sheetId = '';
+  const heading = {suppliers:'Fitxa del proveïdor',units:'Fitxa de la unitat',categories:'Fitxa de la categoria'}[section];
+  dialog.innerHTML = '<div class="sheet-head"><h2 id="order-dialog-title">'+escape(item.name)+'</h2><button type="button" id="close-order-dialog" aria-label="Tanca">✕</button></div>'+
+    '<section class="sheet-part"><h3>'+heading+'</h3>'+
+    '<form id="catalog-edit" data-section="'+section+'" data-id="'+escape(item.id)+'">'+catalogFields(item)+
+    '<p class="error" data-editor-error role="alert" hidden></p></form></section>'+
+    '<div class="actions sheet-foot"><button class="primary" form="catalog-edit">Desa</button>'+
+    '<button type="button" id="close-order-dialog-foot">Cancel·la</button></div>';
+  if (!dialog.open) dialog.showModal();
+}
+
+function catalog() {
+  const current = null;
+  const isSupplier = section === 'suppliers';
+  const title = {suppliers:'Nou proveïdor',articles:'Nou article',units:'Nova unitat',categories:'Nova categoria'}[section];
   const isArticle = section === 'articles';
   const filters = isArticle ? '<div id="article-filters" class="grid">'+
     '<label>Cerca per nom<input id="article-search" type="search" value="'+escape(articleSearch)+'"></label>'+
     '<label>Proveïdor<select id="supplier-filter">'+options(data.suppliers,supplierFilter,'Tots els proveïdors')+'</select></label>'+
     '<label>Categoria<select id="category-filter">'+options(data.categories,categoryFilter,'Totes les categories')+'<option value="-" '+(categoryFilter === '-' ? 'selected' : '')+'>Sense categoria</option></select></label></div>' : '';
-  return (isArticle ? '' : '<article class="card"><h2>'+escape(title)+'</h2><form id="catalog"><div class="grid">'+
-    '<label>'+(current?.shared_name ? 'Nom a GestoCatalog' : 'Nom')+'<input name="name" required maxlength="120" value="'+escape(current?.name)+'"></label>'+
-    (isSupplier ? '<label>WhatsApp amb prefix internacional<input name="phone" type="tel" placeholder="+34 600 000 000" value="'+(current?.phone ? '+'+escape(current.phone) : '')+'"></label>' : '')+
-    (isArticle && current?.shared_name ? '<p class="meta">Nom compartit · '+escape(current.shared_name)+'</p>' : '')+
-    (isArticle ? '<label>Categoria<select name="category">'+options(data.categories,current?.category_id,'Sense categoria')+'</select></label><label>Unitat de compra<select name="unit">'+options(data.units.filter(unit => unit.id !== pendingUnit),current?.unit_id,'Sense unitat')+'</select></label>' : '')+
-    (isSupplier ? '<label>Nom del comercial<input name="contact" maxlength="120" value="'+escape(current?.contact)+'"></label>' : '')+
-    '</div>'+
-    (isSupplier ? contactControls()+'<label>Missatge de WhatsApp<textarea name="messageTemplate" maxlength="1000" rows="4" placeholder="Bon dia, {comercial}! Us voldríem fer aquesta comanda:">'+escape(current?.message_template)+'</textarea></label>'+
-      '<p class="meta">Pots fer servir <code>{comercial}</code>, <code>{proveidor}</code> i <code>{articles}</code>. Si deixes el missatge buit, s’utilitzarà el text per defecte.</p>' : '')+
-    '<div class="actions"><button class="primary">Desa</button>'+(current ? '<button type="button" data-cancel>Cancel·la</button>' : '')+'</div></form></article>')+
+  return (isArticle ? '' : '<article class="card"><h2>'+escape(title)+'</h2><form id="catalog">'+catalogFields(current)+
+    '<div class="actions"><button class="primary">Desa</button></div></form></article>')+
     (isArticle ? pdfImportCard() : '')+
     '<article class="card"><h2>'+{suppliers:'Proveïdors registrats',articles:'Articles registrats',units:'Unitats registrades',categories:'Categories registrades'}[section]+'</h2>'+filters+(isArticle ?
       '<div class="actions catalog-management"><button type="button" id="article-archive-view" aria-pressed="'+archivedArticles+'">'+(archivedArticles ? 'Mostra els articles actius' : 'Mostra els arxivats')+'</button>'+
@@ -1100,6 +1128,7 @@ const draftBadge = '<span class="draft-badge">✓ A la comanda</span>';
 
 const archiveIcon = '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="5" rx="1"/><path d="M5 9v10a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V9"/><path d="M10 13h4"/></svg>';
 const restoreIcon = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12a8 8 0 1 0 2.3-5.6"/><path d="M4 4v5h5"/></svg>';
+const pencilIcon = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16v4z"/><path d="M13.5 6.5l4 4"/></svg>';
 const trashIcon = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16"/><path d="M9 7V4h6v3"/><path d="M6 7l1 13h10l1-13"/><path d="M10 11v6M14 11v6"/></svg>';
 
 // Accions per als articles marcats: arxivar/restaurar, eliminar, assignar proveïdor i fusionar.
@@ -1171,7 +1200,8 @@ function catalogRows() {
     }
     return '<div class="item'+(inDraft ? ' in-draft' : '')+'"><div class="row"><div><strong>'+escape(item.name)+'</strong>'+
       (inDraft ? draftBadge : '')+(detail ? '<div class="meta">'+escape(detail)+'</div>' : '')+'</div><div class="actions">'+order+browse+
-      (isArticle ? '<button type="button" data-article-sheet="'+escape(item.id)+'">Fitxa</button>' : '<button data-edit="'+escape(item.id)+'">Edita</button>')+articleActions+select+'</div></div>'+
+      (isArticle ? '<button type="button" data-article-sheet="'+escape(item.id)+'">Fitxa</button>' :
+        '<button type="button" class="icon-button" data-catalog-edit="'+escape(item.id)+'" title="Edita" aria-haspopup="dialog" aria-label="Edita '+escape(item.name)+'">'+pencilIcon+'</button>')+articleActions+select+'</div></div>'+
       (isArticle && addingArticle === item.id ? catalogLine(item,linked) : '')+'</div>';
   }).join('') || empty('Cap '+names[section]+' per mostrar.');
 }
@@ -1339,7 +1369,7 @@ function articleSheet(article, index) {
       '<label>Nom<input name="name" required maxlength="120" value="'+name+'"></label>'+
       '<label>Categoria<select name="category">'+options(data.categories,article.category_id,'Sense categoria')+'</select></label>'+
       '<label>Unitat de compra<select name="unit">'+options(data.units.filter(unit => unit.id !== pendingUnit),article.unit_id,'Sense unitat')+'</select></label></div>'+
-      '<div class="actions"><button class="primary">Desa la fitxa</button></div></form></section>'+
+      '</form></section>'+
     '<section class="sheet-part"><h3>Proveïdors</h3>'+
       offers.map(offer => '<div class="row item"><span>'+escape(byId('suppliers',offer.supplier_id)?.name)+' · '+escape(byId('units',offer.unit_id)?.name)+'</span>'+
         '<button type="button" class="remove" data-unlink="'+escape(offer.supplier_id)+'">Desvincula</button></div>').join('')+
@@ -1348,7 +1378,7 @@ function articleSheet(article, index) {
         '<button>Afegeix el proveïdor</button></form>' : '<p class="meta">Encara no hi ha proveïdors. Crea’n un a Menú → Proveïdors.</p>')+
     '</section>'+
     '<section class="sheet-part"><h3>Últimes compres</h3>'+articlePurchases(article.id)+'</section>'+
-    '<div class="actions sheet-foot"><button type="button" data-archive-article="'+id+'">'+(article.archived ? 'Restaura' : 'Arxiva')+'</button>'+
+    '<div class="actions sheet-foot"><button class="primary" form="article-sheet">Desa la fitxa</button><button type="button" data-archive-article="'+id+'">'+(article.archived ? 'Restaura' : 'Arxiva')+'</button>'+
       (used ? '' : '<button type="button" class="remove" data-delete-article="'+id+'">Elimina</button>')+'</div>';
 }
 
@@ -1486,9 +1516,34 @@ function whatsappLink(phone, message) {
   return 'https://wa.me/'+phone+'?text='+encodeURIComponent(message);
 }
 
+// Singular d'una unitat en català a partir del nom en plural (caixes → caixa, unitats → unitat).
+// Només és una suggerència: a la fitxa de la unitat es pot escriure el singular correcte.
+function guessSingular(name) {
+  const [word, ...rest] = String(name ?? '').split(' ');
+  const lower = word.toLocaleLowerCase('ca');
+  let singular = word;
+  if (word.length > 3 && lower.endsWith('s')) {
+    if (/[tbd]res$/.test(lower)) singular = word.slice(0,-1);
+    else if (lower.endsWith('ques')) singular = word.slice(0,-4)+'ca';
+    else if (lower.endsWith('gues')) singular = word.slice(0,-4)+'ga';
+    else if (lower.endsWith('ces')) singular = word.slice(0,-3)+'ça';
+    else if (lower.endsWith('ges')) singular = word.slice(0,-3)+'ja';
+    else if (lower.endsWith('ions')) singular = word.slice(0,-4)+'ió';
+    else if (lower.endsWith('es')) singular = word.slice(0,-2)+'a';
+    else singular = word.slice(0,-1);
+  }
+  return [singular,...rest].join(' ');
+}
+
+function unitLabel(unitName, quantity) {
+  if (quantity !== 1) return unitName;
+  const unit = data.units.find(item => item.name === unitName);
+  return unit?.singular || guessSingular(unitName);
+}
+
 function supplierMessage(lines, current, recipient) {
   const supplier = lines[0];
-  const articles = lines.map(line => '• '+quantityFormat.format(line.quantity)+' '+line.unit+' de '+line.article).join('\n');
+  const articles = lines.map(line => '• '+quantityFormat.format(line.quantity)+' '+unitLabel(line.unit,Number(line.quantity))+' de '+line.article).join('\n');
   const contact = recipient || current?.contact || supplier.contact;
   const template = supplier.message_template ?? current?.message_template;
   const hello = contact ? 'Bon dia, '+contact+'!' : 'Bon dia!';
@@ -1861,7 +1916,9 @@ document.addEventListener('click',async event => {
     openOrderEditor(byId('articles',target.articleSheet),'',Object.hasOwn(target,'fromTools'));
   } else if (Object.hasOwn(target,'orderEditor')) {
     openOrderEditor(byId('articles',target.orderEditor),target.orderIndex);
-  } else if (button.id === 'close-order-dialog') {
+  } else if (target.catalogEdit) {
+    openCatalogEditor(byId(section,target.catalogEdit));
+  } else if (button.id === 'close-order-dialog' || button.id === 'close-order-dialog-foot') {
     sheetId = '';
     button.closest('dialog').close();
   } else if (target.orderCatalog) {
@@ -2073,8 +2130,8 @@ document.addEventListener('submit',async event => {
         return;
       }
     }
-    await save({...values,action:section,id:edit},result => {
-      edit = section === 'articles' ? result.id : '';
+    await save({...values,action:section,id:''},() => {
+      edit = '';
     },event.submitter);
   } else if (form.id === 'read-purchase') {
     await readPurchase(form,event.submitter);
@@ -2088,6 +2145,18 @@ document.addEventListener('submit',async event => {
     if (missing.length) { notify('Tria una unitat de compra: '+missing.map(article => article.name).join(', ')+' no en té.',true); return; }
     await runBulk(selected.map(article => [article.name,{action:'offer',article:article.id,supplier:supplier.id,unit:values.unit || article.unit_id}]),event.submitter,
       done => supplier.name+' assignat a '+done+(done === 1 ? ' article.' : ' articles.'));
+  } else if (form.id === 'catalog-edit') {
+    if (form.dataset.section === 'suppliers' && values.phone.trim()) {
+      values.phone = whatsappPhone(values.phone);
+      if (!values.phone) {
+        notify('Indica un número de WhatsApp vàlid.',true);
+        form.elements.phone.focus();
+        return;
+      }
+    }
+    await save({...values,action:form.dataset.section,id:form.dataset.id},() => {
+      form.closest('dialog')?.close();
+    },event.submitter);
   } else if (form.id === 'article-sheet') {
     await save({...values,action:'articles',id:sheetId},null,event.submitter,()=>'Fitxa desada.');
   } else if (form.id === 'offer') {
