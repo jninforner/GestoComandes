@@ -5,8 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="referrer" content="no-referrer">
 <title>GestoComandes</title>
-<link rel="icon" type="image/png" href="./icon.png?v=1.13.1">
-<link rel="apple-touch-icon" sizes="180x180" href="./icon.png?v=1.13.1">
+<link rel="icon" type="image/png" href="./icon.png?v=1.14.0">
+<link rel="apple-touch-icon" sizes="180x180" href="./icon.png?v=1.14.0">
 <style>:root{color-scheme:light;--bg:#f7f8fd;--tx:#28377e;--mu:#566598;--ln:#303f91;--surface:#fff;--soft:#f0f2fc;--border:#d4daf1;--field:#b6bfdf;--on:#fff;--red:#b42318;--green:#17734a}
 :root[data-theme=dark]{color-scheme:dark;--bg:#10152c;--tx:#e5e9ff;--mu:#adb8e5;--ln:#a1afff;--surface:#1b2447;--soft:#232f59;--border:#425080;--field:#6371a0;--on:#10152c;--red:#ff9992;--green:#84dbab}
 *{box-sizing:border-box}
@@ -58,6 +58,8 @@ button:disabled{opacity:.55;cursor:not-allowed}
 #menu-panel{position:absolute;top:calc(100% + 8px);right:0;z-index:5;width:192px;background:var(--surface);border:1px solid var(--border);border-radius:14px;box-shadow:0 12px 30px rgba(40,55,126,.15);padding:10px}
 #tabs{display:grid;gap:6px;margin:0 0 6px}
 #menu-panel button{width:100%;justify-content:flex-start}
+#tabs .menu-link{display:block;padding:8px 12px;border-radius:10px;color:var(--ln);font-weight:600;text-decoration:none;font-size:14px}
+#tabs .menu-link:hover{background:var(--soft)}
 @media(max-width:430px){
   .topbar,.top-actions{gap:6px}
   .top-actions button{font-size:14px;padding:7px 9px}
@@ -199,7 +201,7 @@ img,video,canvas{max-width:100%;height:auto}
 <body>
 <main>
 <header class="topbar">
-  <div class="brand"><h1>GestoComandes</h1><div class="meta version">Versió 1.13.1<span id="sync-state" role="status"></span></div></div>
+  <div class="brand"><h1>GestoComandes</h1><div class="meta version">Versió 1.14.0<span id="sync-state" role="status"></span></div></div>
   <div class="top-actions">
     <div class="menu-anchor">
       <button id="menu-toggle" type="button" aria-label="Menú" aria-expanded="false" aria-controls="menu-panel" hidden><span aria-hidden="true">☰</span><span class="top-action-label" aria-hidden="true">Menú</span></button>
@@ -733,9 +735,9 @@ async function connectNexaMar(email, password, apiKey) {
 
 function mountApp(request, initialData) {
 const pendingUnit = 'pending-supplier-unit';
+const gestoAdminUrl = location.hostname === 'jninforner.github.io' ? 'https://gesto-apps.jninforner.workers.dev/GestoAdmin/' : '/GestoAdmin/';
 const sections = {order:'Nova comanda', articles:'Articles', suppliers:'Proveïdors', categories:'Categories', units:'Unitats', history:'Historial'};
 const content = document.querySelector('#content');
-bindWorkerContacts(content);
 const status = document.querySelector('#status');
 const tabs = document.querySelector('#tabs');
 const theme = document.querySelector('#theme');
@@ -791,24 +793,6 @@ let creatingArticle = false;
 const purchaseUnits = () => data.units.filter(unit => unit.id !== pendingUnit);
 const searchKey = value => value.trim().normalize('NFD').replace(/\p{Diacritic}/gu,'').toLocaleLowerCase('ca');
 let busy = false;
-const workerChannel = typeof BroadcastChannel === 'function' ? new BroadcastChannel('nexa-worker-profiles') : null;
-
-async function refreshWorkerProfiles() {
-  if (!data?.staff || section !== 'staff' || busy || content.querySelector('form:focus-within,[data-worker-ios-panel][open]')) return;
-  try {
-    const refreshed = await api();
-    if (section !== 'staff' || busy || content.querySelector('form:focus-within,[data-worker-ios-panel][open]')) return;
-    data.staff = refreshed.staff;
-    data.tipWorkers = refreshed.tipWorkers;
-    render();
-  } catch (error) {
-    notify(error.message,true);
-  }
-}
-
-workerChannel?.addEventListener('message',refreshWorkerProfiles);
-window.addEventListener('focus',refreshWorkerProfiles);
-
 function setTheme(value) {
   document.documentElement.dataset.theme = value;
   theme.setAttribute('aria-pressed', value === 'dark');
@@ -1366,32 +1350,11 @@ async function openOrderRecipient(form, button) {
   location.assign(link);
 }
 
-function staff() {
-  const roster = [...(data.tipWorkers ?? [])].sort((a,b) => a.name.localeCompare(b.name,'ca'));
-  const permissions = new Map(data.staff.map(person => [person.worker_id,person]));
-  const revoke = person => '<button type="button" data-remove-staff="'+escape(person.email)+'">Retira l’accés</button>';
-  const workers = roster.map(worker => {
-    const person = permissions.get(worker.id);
-    const name = escape(worker.name);
-    if (person) return '<div class="row item"><div><strong>'+name+'</strong><div class="meta">'+
-      escape(person.email)+' · Accés autoritzat</div></div>'+revoke(person)+'</div>';
-    return '<details class="item staff-worker"><summary><strong>'+name+'</strong> <span class="meta">· Sense accés</span></summary>'+
-      '<form data-staff-access><input type="hidden" name="worker" value="'+escape(worker.id)+'">'+
-      '<label>Correu de '+name+'<input type="email" name="email" autocomplete="off" value="'+escape(worker.email ?? '')+'" required></label>'+
-      '<button class="primary">Autoritza l’accés</button></form></details>';
-  }).join('');
-  const unlinked = data.staff.filter(person => !roster.some(worker => worker.id === person.worker_id));
-  return renderWorkerProfiles(roster,escape)+'<article class="card"><h2>Accés a GestoComandes</h2><p class="meta">Gestiona l’accés a GestoComandes des de la fitxa de cada treballador.</p>'+
-    (workers || empty('Encara no hi ha treballadors al registre compartit.'))+
-    (unlinked.length ? '<h3 class="item">Accessos sense fitxa vinculada</h3>'+unlinked.map(person =>
-      '<div class="row item"><span>'+escape(person.email)+'</span>'+revoke(person)+'</div>').join('') : '')+'</article>';
-}
-
 function render() {
   menuButton.hidden = false;
-  const tabsToShow = data.staff ? {...sections,staff:'Equip'} : sections;
-  tabs.innerHTML = Object.entries(tabsToShow).map(([key,label]) => '<button data-tab="'+key+'" '+(section === key ? 'aria-current="page"' : '')+'>'+label+'</button>').join('');
-  content.innerHTML = section === 'order' ? order() : section === 'history' ? history() : section === 'staff' ? staff() : catalog();
+  tabs.innerHTML = Object.entries(sections).map(([key,label]) => '<button data-tab="'+key+'" '+(section === key ? 'aria-current="page"' : '')+'>'+label+'</button>').join('')+
+    (data.staff ? '<a class="menu-link" href="'+gestoAdminUrl+'" target="_blank" rel="noopener">Usuaris (GestoAdmin) ↗</a>' : '');
+  content.innerHTML = section === 'order' ? order() : section === 'history' ? history() : catalog();
   if (section === 'order') orderOptions();
 }
 
@@ -1409,7 +1372,6 @@ document.addEventListener('click',async event => {
     edit = '';
     notify('');
     render();
-    if (section === 'staff') void refreshWorkerProfiles();
   } else if (Object.hasOwn(target,'cancelPdf')) {
     pdfReview = null;
     notify('');
@@ -1462,8 +1424,6 @@ document.addEventListener('click',async event => {
     } catch (error) {
       if (error.name !== 'AbortError') notify('No s’ha pogut obrir l’agenda. Pots escriure el número al formulari.',true);
     }
-  } else if (target.removeStaff) {
-    await save({action:'staffRemove',email:target.removeStaff},null,button);
   } else if (button.id === 'order-visibility') {
     onlyOrdered = !onlyOrdered;
     render();
@@ -1621,8 +1581,6 @@ document.addEventListener('submit',async event => {
       sharedArticleName = '';
       sharedArticleId = '';
     },event.submitter,()=>'Article desat al catàleg compartit.');
-  } else if (form.matches('[data-worker-profile]')) {
-    await save(workerProfilePayload(form),() => workerChannel?.postMessage('updated'),event.submitter,()=>'S’ha desat la fitxa.');
   } else if (form.id === 'merge-articles') {
     const target = byId('articles',values.target);
     const sources = [...mergeSelection].filter(id => id !== values.target);
@@ -1669,8 +1627,6 @@ document.addEventListener('submit',async event => {
     }
     const lines = data.draft.lines.map((line,position) => position === Number(index) ? {...line,quantity,unit:values.unit,supplier:values.supplier} : line);
     await saveDraft(combineDraftLines(lines),event.submitter);
-  } else if (Object.hasOwn(form.dataset,'staffAccess')) {
-    await save({action:'staffAdd',worker:values.worker,email:values.email},null,event.submitter);
   } else if (form.id === 'read-catalog') {
     await analyzeCatalog(form,event.submitter);
   } else if (form.id === 'confirm-pdf') {
