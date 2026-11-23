@@ -5,8 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="referrer" content="no-referrer">
 <title>GestoCatalog</title>
-<link rel="icon" type="image/png" href="./icon.png?v=1.19.0">
-<link rel="apple-touch-icon" sizes="180x180" href="./icon.png?v=1.19.0">
+<link rel="icon" type="image/png" href="./icon.png?v=1.19.1">
+<link rel="apple-touch-icon" sizes="180x180" href="./icon.png?v=1.19.1">
 <style>:root{color-scheme:light;--bg:#f7f8fd;--tx:#28377e;--mu:#566598;--ln:#303f91;--surface:#fff;--soft:#f0f2fc;--border:#d4daf1;--field:#b6bfdf;--on:#fff;--red:#b42318;--green:#17734a}
 :root[data-theme=dark]{color-scheme:dark;--bg:#10152c;--tx:#e5e9ff;--mu:#adb8e5;--ln:#a1afff;--surface:#1b2447;--soft:#232f59;--border:#425080;--field:#6371a0;--on:#10152c;--red:#ff9992;--green:#84dbab}
 *{box-sizing:border-box}
@@ -31,7 +31,7 @@ button:hover,.button:hover{background:var(--soft)}
 button:disabled{opacity:.55;cursor:not-allowed}
 .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:12px}
 .row{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
-.item{border-top:1px solid var(--border);padding:12px 0}
+.item{border-top:1px solid var(--border);padding:8px 0}
 .item:last-child{padding-bottom:0}
 .meta{color:var(--mu);font-size:14px}
 .error,.remove{color:var(--red)}
@@ -126,10 +126,10 @@ img,video,canvas{max-width:100%;height:auto}
 .order-list-row{display:grid;grid-template-columns:minmax(0,1fr) 44px;align-items:start;border-top:1px solid var(--border)}
 .order-list-row.is-ordered{background:var(--soft)}
 .order-toggle,.order-pencil{border:0;border-radius:0;background:transparent}
-.order-toggle{width:100%;justify-content:start;gap:8px;padding:6px 9px;text-align:start}
+.order-toggle{width:100%;min-height:40px;justify-content:start;gap:8px;padding:4px 9px;text-align:start}
 .order-marker{flex:0 0 18px;height:18px;border:1px solid var(--field);border-radius:5px;text-align:center;line-height:16px}
 .is-ordered .order-marker{background:var(--ln);color:var(--on);border-color:var(--ln)}
-.order-item-copy{display:grid;min-width:0;line-height:1.25;gap:3px}
+.order-item-copy{display:grid;min-width:0;line-height:1.2;gap:1px}
 .order-item-copy strong,.order-item-copy .meta{overflow-wrap:anywhere}
 .order-item-copy .meta{font-weight:400}
 .order-list-row strong{color:var(--red)}
@@ -199,13 +199,15 @@ img,video,canvas{max-width:100%;height:auto}
 .purchase-check input{width:auto;min-height:0}
 .purchase-head{width:100%;flex-direction:column;align-items:flex-start;gap:2px;border:0;background:transparent;padding:0;text-align:left}
 .purchase-head:hover{background:transparent}
-.article-row{display:grid;grid-template-columns:auto minmax(0,1fr) auto auto;align-items:center;gap:6px;border-top:1px solid var(--border);padding:4px 0}
+.article-row{display:grid;grid-template-columns:auto minmax(0,1fr) auto auto;align-items:center;gap:6px;border-top:1px solid var(--border);padding:2px 0}
 .article-row.in-draft{padding-inline:6px;border-radius:8px}
 .article-select{width:20px;min-height:20px;margin:0 6px}
-.article-open{display:block;min-width:0;justify-content:flex-start;border:0;background:transparent;padding:8px 4px;text-align:left;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-weight:400}
+.article-open{display:block;min-width:0;min-height:36px;justify-content:flex-start;border:0;background:transparent;padding:6px 4px;text-align:left;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-weight:400}
 .article-open:hover{background:var(--soft)}
 .article-open .meta{font-size:14px}
-.icon-button{min-width:0;width:40px;min-height:40px;padding:0}
+.icon-button{min-width:0;width:36px;min-height:36px;padding:0}
+.catalog-row{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:6px;border-top:1px solid var(--border);padding:2px 0}
+.catalog-name{min-width:0;padding:6px 4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .icon-button svg{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
 .icon-button.remove{border-color:var(--red)}
 .icon-button:disabled{opacity:.35}
@@ -213,6 +215,8 @@ img,video,canvas{max-width:100%;height:auto}
 .bulk-bar .actions{margin:8px 0}
 .bulk-bar form{margin-top:8px;align-items:end}
 .bulk-submit{display:flex;align-items:flex-end}
+.catalog-new>summary{cursor:pointer;font-weight:700;font-size:17px}
+.catalog-new[open]>summary{margin-bottom:10px}
 
 .worker-profiles .worker-profile-item{border-top:1px solid var(--border);padding:10px 0}
 .worker-profile-item>summary,.worker-profile-inactive>summary{cursor:pointer;min-height:34px;display:flex;align-items:center;justify-content:space-between;gap:12px}
@@ -247,7 +251,7 @@ img,video,canvas{max-width:100%;height:auto}
 <body>
 <main>
 <header class="topbar">
-  <div class="brand"><h1>GestoCatalog</h1><div class="meta version">Versió 1.19.0<span id="sync-state" role="status"></span></div></div>
+  <div class="brand"><h1>GestoCatalog</h1><div class="meta version">Versió 1.19.1<span id="sync-state" role="status"></span></div></div>
   <div class="top-actions">
     <div class="menu-anchor">
       <button id="menu-toggle" type="button" aria-label="Menú" aria-expanded="false" aria-controls="menu-panel" hidden><span aria-hidden="true">☰</span><span class="top-action-label" aria-hidden="true">Menú</span></button>
@@ -958,8 +962,8 @@ function catalog() {
     '<label>Cerca per nom<input id="article-search" type="search" value="'+escape(articleSearch)+'"></label>'+
     '<label>Proveïdor<select id="supplier-filter">'+options(data.suppliers,supplierFilter,'Tots els proveïdors')+'</select></label>'+
     '<label>Categoria<select id="category-filter">'+options(data.categories,categoryFilter,'Totes les categories')+'<option value="-" '+(categoryFilter === '-' ? 'selected' : '')+'>Sense categoria</option></select></label></div>' : '';
-  return (isArticle ? '' : '<article class="card"><h2>'+escape(title)+'</h2><form id="catalog">'+catalogFields(current)+
-    '<div class="actions"><button class="primary">Desa</button></div></form></article>')+
+  return (isArticle ? '' : '<article class="card"><details class="catalog-new"><summary>'+escape(title)+'</summary><form id="catalog">'+catalogFields(current)+
+    '<div class="actions"><button class="primary">Desa</button></div></form></details></article>')+
     (isArticle ? pdfImportCard() : '')+
     '<article class="card"><h2>'+{suppliers:'Proveïdors registrats',articles:'Articles registrats',units:'Unitats registrades',categories:'Categories registrades'}[section]+'</h2>'+filters+(isArticle ?
       '<div class="actions catalog-management"><button type="button" id="article-archive-view" aria-pressed="'+archivedArticles+'">'+(archivedArticles ? 'Mostra els articles actius' : 'Mostra els arxivats')+'</button>'+
@@ -1178,8 +1182,6 @@ function catalogRows() {
     const detail = isSupplier ? [item.contact,item.phone ? '+'+item.phone : 'Tria el contacte a WhatsApp'].filter(Boolean).join(' · ') :
       isArticle ? [byId('categories',item.category_id)?.name,byId('units',item.unit_id)?.name,
         linked.map(offer => byId('suppliers',offer.supplier_id)?.name).filter(Boolean).join(' · ') || 'Sense proveïdors'].filter(Boolean).join(' · ') : '';
-    const browse = isSupplier || section === 'categories'
-      ? '<button data-browse-articles="'+escape(item.id)+'">Mostra els articles</button>' : '';
     const order = '';
     const inDraft = added?.has(item.id);
     const articleActions = isArticle ?
@@ -1198,8 +1200,18 @@ function catalogRows() {
         '<button type="button" class="icon-button" data-archive-article="'+escape(item.id)+'" title="'+(item.archived ? 'Restaura' : 'Arxiva')+'" aria-label="'+(item.archived ? 'Restaura ' : 'Arxiva ')+escape(item.name)+'">'+(item.archived ? restoreIcon : archiveIcon)+'</button>'+
         '<button type="button" class="icon-button remove" data-delete-article="'+escape(item.id)+'"'+(used ? ' disabled title="No es pot eliminar: és en una comanda. El pots arxivar."' : ' title="Elimina"')+' aria-label="Elimina '+escape(item.name)+'">'+trashIcon+'</button></div>';
     }
+    if (!isArticle) {
+      // Proveïdors i categories: prement el nom es mostren els seus articles. Unitats: només el nom.
+      const label = '<strong>'+escape(item.name)+'</strong>'+(detail ? '<span class="meta"> · '+escape(detail)+'</span>' : '');
+      const full = item.name+(detail ? ' · '+detail : '');
+      return '<div class="catalog-row">'+
+        (isSupplier || section === 'categories'
+          ? '<button type="button" class="article-open" data-browse-articles="'+escape(item.id)+'" title="Mostra els articles de '+escape(full)+'">'+label+'</button>'
+          : '<span class="catalog-name" title="'+escape(full)+'">'+label+'</span>')+
+        '<button type="button" class="icon-button" data-catalog-edit="'+escape(item.id)+'" title="Edita" aria-haspopup="dialog" aria-label="Edita '+escape(item.name)+'">'+pencilIcon+'</button></div>';
+    }
     return '<div class="item'+(inDraft ? ' in-draft' : '')+'"><div class="row"><div><strong>'+escape(item.name)+'</strong>'+
-      (inDraft ? draftBadge : '')+(detail ? '<div class="meta">'+escape(detail)+'</div>' : '')+'</div><div class="actions">'+order+browse+
+      (inDraft ? draftBadge : '')+(detail ? '<div class="meta">'+escape(detail)+'</div>' : '')+'</div><div class="actions">'+order+
       (isArticle ? '<button type="button" data-article-sheet="'+escape(item.id)+'">Fitxa</button>' :
         '<button type="button" class="icon-button" data-catalog-edit="'+escape(item.id)+'" title="Edita" aria-haspopup="dialog" aria-label="Edita '+escape(item.name)+'">'+pencilIcon+'</button>')+articleActions+select+'</div></div>'+
       (isArticle && addingArticle === item.id ? catalogLine(item,linked) : '')+'</div>';
