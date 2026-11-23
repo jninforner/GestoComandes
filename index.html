@@ -5,8 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="referrer" content="no-referrer">
 <title>GestoComandes</title>
-<link rel="icon" type="image/png" href="./icon.png?v=1.14.0">
-<link rel="apple-touch-icon" sizes="180x180" href="./icon.png?v=1.14.0">
+<link rel="icon" type="image/png" href="./icon.png?v=1.14.1">
+<link rel="apple-touch-icon" sizes="180x180" href="./icon.png?v=1.14.1">
 <style>:root{color-scheme:light;--bg:#f7f8fd;--tx:#28377e;--mu:#566598;--ln:#303f91;--surface:#fff;--soft:#f0f2fc;--border:#d4daf1;--field:#b6bfdf;--on:#fff;--red:#b42318;--green:#17734a}
 :root[data-theme=dark]{color-scheme:dark;--bg:#10152c;--tx:#e5e9ff;--mu:#adb8e5;--ln:#a1afff;--surface:#1b2447;--soft:#232f59;--border:#425080;--field:#6371a0;--on:#10152c;--red:#ff9992;--green:#84dbab}
 *{box-sizing:border-box}
@@ -58,8 +58,6 @@ button:disabled{opacity:.55;cursor:not-allowed}
 #menu-panel{position:absolute;top:calc(100% + 8px);right:0;z-index:5;width:192px;background:var(--surface);border:1px solid var(--border);border-radius:14px;box-shadow:0 12px 30px rgba(40,55,126,.15);padding:10px}
 #tabs{display:grid;gap:6px;margin:0 0 6px}
 #menu-panel button{width:100%;justify-content:flex-start}
-#tabs .menu-link{display:block;padding:8px 12px;border-radius:10px;color:var(--ln);font-weight:600;text-decoration:none;font-size:14px}
-#tabs .menu-link:hover{background:var(--soft)}
 @media(max-width:430px){
   .topbar,.top-actions{gap:6px}
   .top-actions button{font-size:14px;padding:7px 9px}
@@ -201,7 +199,7 @@ img,video,canvas{max-width:100%;height:auto}
 <body>
 <main>
 <header class="topbar">
-  <div class="brand"><h1>GestoComandes</h1><div class="meta version">Versió 1.14.0<span id="sync-state" role="status"></span></div></div>
+  <div class="brand"><h1>GestoComandes</h1><div class="meta version">Versió 1.14.1<span id="sync-state" role="status"></span></div></div>
   <div class="top-actions">
     <div class="menu-anchor">
       <button id="menu-toggle" type="button" aria-label="Menú" aria-expanded="false" aria-controls="menu-panel" hidden><span aria-hidden="true">☰</span><span class="top-action-label" aria-hidden="true">Menú</span></button>
@@ -735,7 +733,6 @@ async function connectNexaMar(email, password, apiKey) {
 
 function mountApp(request, initialData) {
 const pendingUnit = 'pending-supplier-unit';
-const gestoAdminUrl = location.hostname === 'jninforner.github.io' ? 'https://gesto-apps.jninforner.workers.dev/GestoAdmin/' : '/GestoAdmin/';
 const sections = {order:'Nova comanda', articles:'Articles', suppliers:'Proveïdors', categories:'Categories', units:'Unitats', history:'Historial'};
 const content = document.querySelector('#content');
 const status = document.querySelector('#status');
@@ -1352,8 +1349,7 @@ async function openOrderRecipient(form, button) {
 
 function render() {
   menuButton.hidden = false;
-  tabs.innerHTML = Object.entries(sections).map(([key,label]) => '<button data-tab="'+key+'" '+(section === key ? 'aria-current="page"' : '')+'>'+label+'</button>').join('')+
-    (data.staff ? '<a class="menu-link" href="'+gestoAdminUrl+'" target="_blank" rel="noopener">Usuaris (GestoAdmin) ↗</a>' : '');
+  tabs.innerHTML = Object.entries(sections).map(([key,label]) => '<button data-tab="'+key+'" '+(section === key ? 'aria-current="page"' : '')+'>'+label+'</button>').join('');
   content.innerHTML = section === 'order' ? order() : section === 'history' ? history() : catalog();
   if (section === 'order') orderOptions();
 }
