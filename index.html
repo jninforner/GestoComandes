@@ -5,8 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="referrer" content="no-referrer">
 <title>GestoComandes</title>
-<link rel="icon" type="image/png" href="./icon.png?v=1.14.3">
-<link rel="apple-touch-icon" sizes="180x180" href="./icon.png?v=1.14.3">
+<link rel="icon" type="image/png" href="./icon.png?v=1.15.0">
+<link rel="apple-touch-icon" sizes="180x180" href="./icon.png?v=1.15.0">
 <style>:root{color-scheme:light;--bg:#f7f8fd;--tx:#28377e;--mu:#566598;--ln:#303f91;--surface:#fff;--soft:#f0f2fc;--border:#d4daf1;--field:#b6bfdf;--on:#fff;--red:#b42318;--green:#17734a}
 :root[data-theme=dark]{color-scheme:dark;--bg:#10152c;--tx:#e5e9ff;--mu:#adb8e5;--ln:#a1afff;--surface:#1b2447;--soft:#232f59;--border:#425080;--field:#6371a0;--on:#10152c;--red:#ff9992;--green:#84dbab}
 *{box-sizing:border-box}
@@ -199,13 +199,15 @@ img,video,canvas{max-width:100%;height:auto}
 .main-card{background:var(--main-bg);border-color:var(--main-border)}
 .main-card .card{background:var(--surface);box-shadow:none;border-radius:14px;padding:16px;margin:12px 0 0}
 .main-card .card h3:first-child{margin-top:0}
+.main-card .card h2{font-size:17px;margin:0 0 10px}
+.main-card>.card:first-of-type{margin-top:14px}
 </style>
 <link rel="manifest" href="./manifest.webmanifest">
 </head>
 <body>
 <main>
 <header class="topbar">
-  <div class="brand"><h1>GestoComandes</h1><div class="meta version">Versió 1.14.3<span id="sync-state" role="status"></span></div></div>
+  <div class="brand"><h1>GestoComandes</h1><div class="meta version">Versió 1.15.0<span id="sync-state" role="status"></span></div></div>
   <div class="top-actions">
     <div class="menu-anchor">
       <button id="menu-toggle" type="button" aria-label="Menú" aria-expanded="false" aria-controls="menu-panel" hidden><span aria-hidden="true">☰</span><span class="top-action-label" aria-hidden="true">Menú</span></button>
@@ -886,8 +888,8 @@ function catalog() {
       '<p class="meta">Pots fer servir <code>{comercial}</code>, <code>{proveidor}</code> i <code>{articles}</code>. Si deixes el missatge buit, s’utilitzarà el text per defecte.</p>' : '')+
     '<div class="actions"><button class="primary">Desa</button>'+(current ? '<button type="button" data-cancel>Cancel·la</button>' : '')+'</div></form></article>'+
     (section === 'articles' && current ? offerEditor(current) : '')+
-    (isArticle ? sharedCatalogCard() + pdfImportCard() : '')+
-    '<article class="card"><h2>'+sections[section]+'</h2>'+filters+(isArticle ?
+    (isArticle ? pdfImportCard() : '')+
+    '<article class="card"><h2>'+{suppliers:'Proveïdors registrats',articles:'Articles registrats',units:'Unitats registrades',categories:'Categories registrades'}[section]+'</h2>'+filters+(isArticle ?
       '<div class="actions catalog-management"><button type="button" id="article-archive-view" aria-pressed="'+archivedArticles+'">'+(archivedArticles ? 'Mostra els articles actius' : 'Mostra els arxivats')+'</button></div>'+
       '<div id="article-merge-controls">'+articleMergeControls()+'</div>' : '')+'<div id="catalog-rows">'+
     catalogRows()+'</div></article>';
@@ -1267,7 +1269,7 @@ function saveDraft(lines, button) {
 
 function history() {
   const orders = Map.groupBy(data.lines, line => line.order_id);
-  return '<article class="card"><h2>Historial de comandes</h2>'+
+  return '<article class="card main-card"><h2>Historial de comandes</h2>'+
     ([...orders].map(([id, lines]) => {
       const groups = Map.groupBy(lines,line => line.supplier_id);
       return '<div class="item"><div class="row"><div><strong>'+escape(dateFormat.format(new Date(lines[0].created_at)))+'</strong><div class="meta">'+
@@ -1356,7 +1358,8 @@ async function openOrderRecipient(form, button) {
 function render() {
   menuButton.hidden = false;
   tabs.innerHTML = Object.entries(sections).map(([key,label]) => '<button data-tab="'+key+'" '+(section === key ? 'aria-current="page"' : '')+'>'+label+'</button>').join('');
-  content.innerHTML = section === 'order' ? order() : section === 'history' ? history() : catalog();
+  content.innerHTML = section === 'order' ? order() : section === 'history' ? history() :
+    '<section class="card main-card"><h2>'+sections[section]+'</h2>'+catalog()+'</section>';
   if (section === 'order') orderOptions();
 }
 
