@@ -5,8 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="referrer" content="no-referrer">
 <title>GestoComandes</title>
-<link rel="icon" type="image/png" href="./icon.png?v=1.15.0">
-<link rel="apple-touch-icon" sizes="180x180" href="./icon.png?v=1.15.0">
+<link rel="icon" type="image/png" href="./icon.png?v=1.16.0">
+<link rel="apple-touch-icon" sizes="180x180" href="./icon.png?v=1.16.0">
 <style>:root{color-scheme:light;--bg:#f7f8fd;--tx:#28377e;--mu:#566598;--ln:#303f91;--surface:#fff;--soft:#f0f2fc;--border:#d4daf1;--field:#b6bfdf;--on:#fff;--red:#b42318;--green:#17734a}
 :root[data-theme=dark]{color-scheme:dark;--bg:#10152c;--tx:#e5e9ff;--mu:#adb8e5;--ln:#a1afff;--surface:#1b2447;--soft:#232f59;--border:#425080;--field:#6371a0;--on:#10152c;--red:#ff9992;--green:#84dbab}
 *{box-sizing:border-box}
@@ -173,6 +173,32 @@ img,video,canvas{max-width:100%;height:auto}
   #order-add-search input,#order-add-search button{min-height:42px;padding-block:4px}
   .order-category{margin-top:8px}
 }
+.order-list-row{grid-template-columns:minmax(0,1fr) auto 44px}
+.order-list-row:not(.is-ordered){grid-template-columns:minmax(0,1fr) 44px}
+.order-steps{display:flex;gap:4px;align-items:center;padding:6px 0}
+.order-step{min-width:0;width:38px;min-height:36px;padding:0;font-size:14px}
+#order-dialog{width:min(560px,calc(100% - 24px))}
+.sheet-head{display:flex;justify-content:space-between;align-items:center;gap:10px}
+.sheet-head h2{margin:0}
+#close-order-dialog{min-width:0;width:40px;min-height:40px;padding:0}
+.sheet-part{border-top:1px solid var(--border);margin-top:14px;padding-top:12px}
+.sheet-part h3{margin:0 0 8px}
+.sheet-offer{margin-top:10px}
+.sheet-foot{border-top:1px solid var(--border);margin-top:14px;padding-top:12px}
+.invoice-card{margin:0 0 14px}
+.invoice-card>summary{cursor:pointer;font-weight:650}
+.invoice-card form{margin-top:10px}
+.purchase-row{border:1px solid var(--border);border-radius:12px;padding:10px 12px;margin:12px 0 0}
+.purchase-row legend{font-weight:650;padding:0 4px}
+.purchase-row.is-discarded{opacity:.6}
+.purchase-row .grid{grid-template-columns:repeat(auto-fit,minmax(110px,1fr))}
+.purchase-article{grid-column:1/-1}
+.purchase-row-actions{display:flex;flex-wrap:wrap;align-items:center;gap:10px;justify-content:space-between}
+.purchase-row-actions .meta{flex:1 1 200px;margin:0}
+.purchase-check{display:flex;align-items:center;gap:6px;color:var(--tx)}
+.purchase-check input{width:auto;min-height:0}
+.purchase-head{width:100%;flex-direction:column;align-items:flex-start;gap:2px;border:0;background:transparent;padding:0;text-align:left}
+.purchase-head:hover{background:transparent}
 
 .worker-profiles .worker-profile-item{border-top:1px solid var(--border);padding:10px 0}
 .worker-profile-item>summary,.worker-profile-inactive>summary{cursor:pointer;min-height:34px;display:flex;align-items:center;justify-content:space-between;gap:12px}
@@ -207,7 +233,7 @@ img,video,canvas{max-width:100%;height:auto}
 <body>
 <main>
 <header class="topbar">
-  <div class="brand"><h1>GestoComandes</h1><div class="meta version">Versió 1.15.0<span id="sync-state" role="status"></span></div></div>
+  <div class="brand"><h1>GestoComandes</h1><div class="meta version">Versió 1.16.0<span id="sync-state" role="status"></span></div></div>
   <div class="top-actions">
     <div class="menu-anchor">
       <button id="menu-toggle" type="button" aria-label="Menú" aria-expanded="false" aria-controls="menu-panel" hidden><span aria-hidden="true">☰</span><span class="top-action-label" aria-hidden="true">Menú</span></button>
@@ -741,7 +767,7 @@ async function connectNexaMar(email, password, apiKey) {
 
 function mountApp(request, initialData) {
 const pendingUnit = 'pending-supplier-unit';
-const sections = {order:'Nova comanda', articles:'Articles', suppliers:'Proveïdors', categories:'Categories', units:'Unitats', history:'Historial'};
+const sections = {order:'Nova comanda', articles:'Eines del catàleg', suppliers:'Proveïdors', categories:'Categories', units:'Unitats', purchases:'Compres', history:'Historial'};
 const content = document.querySelector('#content');
 const status = document.querySelector('#status');
 const tabs = document.querySelector('#tabs');
@@ -795,6 +821,10 @@ let orderSupplier = '';
 let orderSearch = '';
 let showMatches = true;
 let creatingArticle = false;
+let invoiceReview = null;
+let readingInvoice = false;
+let openPurchase = '';
+let duplicateAllowed = false;
 const purchaseUnits = () => data.units.filter(unit => unit.id !== pendingUnit);
 const searchKey = value => value.trim().normalize('NFD').replace(/\p{Diacritic}/gu,'').toLocaleLowerCase('ca');
 let busy = false;
@@ -877,7 +907,7 @@ function catalog() {
     '<label>Cerca per nom<input id="article-search" type="search" value="'+escape(articleSearch)+'"></label>'+
     '<label>Proveïdor<select id="supplier-filter">'+options(data.suppliers,supplierFilter,'Tots els proveïdors')+'</select></label>'+
     '<label>Categoria<select id="category-filter">'+options(data.categories,categoryFilter,'Totes les categories')+'<option value="-" '+(categoryFilter === '-' ? 'selected' : '')+'>Sense categoria</option></select></label></div>' : '';
-  return '<article class="card"><h2>'+escape(title)+'</h2><form id="catalog"><div class="grid">'+
+  return (isArticle ? '' : '<article class="card"><h2>'+escape(title)+'</h2><form id="catalog"><div class="grid">'+
     '<label>'+(current?.shared_name ? 'Nom a GestoComandes' : 'Nom')+'<input name="name" required maxlength="120" value="'+escape(current?.name)+'"></label>'+
     (isSupplier ? '<label>WhatsApp amb prefix internacional<input name="phone" type="tel" placeholder="+34 600 000 000" value="'+(current?.phone ? '+'+escape(current.phone) : '')+'"></label>' : '')+
     (isArticle && current?.shared_name ? '<p class="meta">Nom compartit · '+escape(current.shared_name)+'</p>' : '')+
@@ -886,8 +916,7 @@ function catalog() {
     '</div>'+
     (isSupplier ? contactControls()+'<label>Missatge de WhatsApp<textarea name="messageTemplate" maxlength="1000" rows="4" placeholder="Bon dia, {comercial}! Us voldríem fer aquesta comanda:">'+escape(current?.message_template)+'</textarea></label>'+
       '<p class="meta">Pots fer servir <code>{comercial}</code>, <code>{proveidor}</code> i <code>{articles}</code>. Si deixes el missatge buit, s’utilitzarà el text per defecte.</p>' : '')+
-    '<div class="actions"><button class="primary">Desa</button>'+(current ? '<button type="button" data-cancel>Cancel·la</button>' : '')+'</div></form></article>'+
-    (section === 'articles' && current ? offerEditor(current) : '')+
+    '<div class="actions"><button class="primary">Desa</button>'+(current ? '<button type="button" data-cancel>Cancel·la</button>' : '')+'</div></form></article>')+
     (isArticle ? pdfImportCard() : '')+
     '<article class="card"><h2>'+{suppliers:'Proveïdors registrats',articles:'Articles registrats',units:'Unitats registrades',categories:'Categories registrades'}[section]+'</h2>'+filters+(isArticle ?
       '<div class="actions catalog-management"><button type="button" id="article-archive-view" aria-pressed="'+archivedArticles+'">'+(archivedArticles ? 'Mostra els articles actius' : 'Mostra els arxivats')+'</button></div>'+
@@ -1077,8 +1106,7 @@ function catalogRows() {
         linked.map(offer => byId('suppliers',offer.supplier_id)?.name).filter(Boolean).join(' · ') || 'Sense proveïdors'].filter(Boolean).join(' · ') : '';
     const browse = isSupplier || section === 'categories'
       ? '<button data-browse-articles="'+escape(item.id)+'">Mostra els articles</button>' : '';
-    const order = isArticle && !item.archived ? '<button data-add-article="'+escape(item.id)+'" aria-expanded="'+(addingArticle === item.id)+'"'+
-      (linked.length ? '' : ' disabled')+'>Afegeix a la comanda</button>' : '';
+    const order = '';
     const inDraft = added?.has(item.id);
     const articleActions = isArticle ?
       '<button type="button" data-archive-article="'+escape(item.id)+'">'+(item.archived ? 'Restaura' : 'Arxiva')+'</button>'+
@@ -1088,7 +1116,7 @@ function catalogRows() {
       (mergeSelection.has(item.id) ? ' checked' : '')+' aria-label="Selecciona '+escape(item.name)+' per fusionar"> Fusiona</label>' : '';
     return '<div class="item'+(inDraft ? ' in-draft' : '')+'"><div class="row"><div><strong>'+escape(item.name)+'</strong>'+
       (inDraft ? draftBadge : '')+(detail ? '<div class="meta">'+escape(detail)+'</div>' : '')+'</div><div class="actions">'+order+browse+
-      '<button data-edit="'+escape(item.id)+'">Edita</button>'+articleActions+select+'</div></div>'+
+      (isArticle ? '<button type="button" data-article-sheet="'+escape(item.id)+'">Fitxa</button>' : '<button data-edit="'+escape(item.id)+'">Edita</button>')+articleActions+select+'</div></div>'+
       (isArticle && addingArticle === item.id ? catalogLine(item,linked) : '')+'</div>';
   }).join('') || empty('Cap '+names[section]+' per mostrar.');
 }
@@ -1150,9 +1178,9 @@ function order() {
     '<label>Proveïdor<select id="order-supplier-filter">'+
     options(data.suppliers,orderSupplier,'Tots')+'</select></label>'+
     '<button type="button" id="order-visibility" aria-pressed="'+onlyOrdered+'"><span aria-hidden="true">👁︎</span> Només la comanda</button></div></div>'+
-    lookup+'<div id="order-groups">'+orderGroups(draft)+'</div>'+
+    invoiceCard()+lookup+'<div id="order-groups">'+orderGroups(draft)+'</div>'+
     (draft.length ? '<div class="actions order-send"><button class="primary" id="generate">Desa i genera els missatges</button></div>' : '')+
-    '</article><dialog id="order-dialog" aria-labelledby="order-dialog-title"></dialog>';
+    '</article>';
 }
 
 function orderGroups(draft) {
@@ -1170,7 +1198,7 @@ function orderGroups(draft) {
       return lines ? lines.map(line => orderListRow(article,line,draft.indexOf(line))).join('') : orderListRow(article);
     }).join('')+'</section>').join('') || empty(orderCategory || orderSupplier ? 'No hi ha articles que coincideixin amb els filtres.' :
       onlyOrdered ? 'Encara no hi ha cap article a la comanda.' :
-      !request && !data.articles.length ? 'El catàleg de prova és buit. Pots afegir-hi articles des del menú Articles.' :
+      !request && !data.articles.length ? 'El catàleg de prova és buit. Escriu un nom a «Afegeix un article» per crear-ne un.' :
       'El catàleg és buit.');
 }
 
@@ -1197,12 +1225,40 @@ function orderListRow(article,line,index) {
     '<button type="button" class="order-toggle" '+toggle+' aria-pressed="'+Boolean(line)+'" title="'+name+'">'+
     '<span class="order-marker" aria-hidden="true">'+(line ? '✓' : '')+'</span><span class="order-item-copy">'+
     '<strong>'+name+'</strong><span class="meta">'+escape(detail)+'</span></span></button>'+
+    (line ? '<span class="order-steps"><button type="button" class="order-step" data-step="1" data-step-index="'+index+'" aria-label="Puja la quantitat de '+name+'">▲</button>'+
+      '<button type="button" class="order-step" data-step="-1" data-step-index="'+index+'" aria-label="Baixa la quantitat de '+name+'">▼</button></span>' : '')+
     '<button type="button" class="order-pencil" data-order-editor="'+id+'" data-order-index="'+(line ? index : '')+
-    '" aria-haspopup="dialog" aria-label="Edita '+name+'">'+pencil+'</button></div>';
+    '" aria-haspopup="dialog" aria-label="Fitxa de '+name+'">'+pencil+'</button></div>';
 }
 
+// Fitxa de l'article (llapis): línia de la comanda, dades de l'article i proveïdors, tot en un sol diàleg.
+let sheetId = '';
 function openOrderEditor(article, index) {
+  if (!article) return;
+  sheetId = article.id;
+  edit = article.id;
+  let dialog = document.querySelector('#order-dialog');
+  // El diàleg viu fora del contingut perquè no es tanqui quan es torna a pintar la pantalla.
+  if (!dialog) {
+    dialog = document.createElement('dialog');
+    dialog.id = 'order-dialog';
+    dialog.setAttribute('aria-labelledby','order-dialog-title');
+    dialog.addEventListener('close',() => { sheetId = ''; });
+    document.querySelector('#workspace').append(dialog);
+  }
+  dialog.innerHTML = articleSheet(article, index);
+  if (!dialog.open) dialog.showModal();
+}
+
+function refreshArticleSheet() {
   const dialog = document.querySelector('#order-dialog');
+  const article = byId('articles',sheetId);
+  if (!dialog?.open || !article) return;
+  const index = data.draft.lines.findIndex(line => line.article === article.id);
+  dialog.innerHTML = articleSheet(article, index < 0 ? '' : String(index));
+}
+
+function articleSheet(article, index) {
   const line = index === '' ? null : data.draft.lines[Number(index)];
   const offers = data.offers.filter(offer => offer.article_id === article.id);
   const suppliers = offers.map(offer => byId('suppliers',offer.supplier_id)).filter(Boolean);
@@ -1210,17 +1266,33 @@ function openOrderEditor(article, index) {
   const units = purchaseUnits();
   const name = escape(article.name);
   const id = escape(article.id);
-  const actions = '<button type="button" data-order-catalog="'+id+'">Edita la fitxa</button>'+
-    '<button type="button" id="close-order-dialog">Cancel·la</button>';
-  dialog.innerHTML = '<h2 id="order-dialog-title">'+name+'</h2>'+
-    (suppliers.length && units.length ? '<form class="order-editor" data-edit-quantity="'+index+'" data-article="'+id+'">'+
+  const used = data.draft.lines.some(item => item.article === article.id) || data.lines.some(item => item.article_id === article.id);
+  const orderPart = article.archived ? '<p class="meta">Article arxivat. Restaura’l per poder-lo demanar.</p>' :
+    suppliers.length && units.length ? '<form class="order-editor" data-edit-quantity="'+index+'" data-article="'+id+'"><div class="grid">'+
       '<label>Quantitat<input name="quantity" type="number" step="any" inputmode="decimal" required value="'+escape(line?.quantity ?? 1)+'"></label>'+
       '<label>Unitat<select name="unit" required>'+options(units,line?.unit || defaults.unit,'Tria una unitat')+'</select></label>'+
-      '<label>Proveïdor<select name="supplier" required>'+options(suppliers,line?.supplier || defaults.supplier,'Tria un proveïdor')+'</select></label>'+
+      '<label>Proveïdor<select name="supplier" required>'+options(suppliers,line?.supplier || defaults.supplier,'Tria un proveïdor')+'</select></label></div>'+
       '<p class="error" data-editor-error role="alert" hidden></p>'+
-      '<div class="actions"><button type="submit" class="primary">'+(line ? 'Desa' : 'Afegeix a la comanda')+'</button>'+actions+'</div></form>'
-      : '<p>Assigna un proveïdor i una unitat de compra a l’article.</p><div class="actions">'+actions+'</div>');
-  dialog.showModal();
+      '<div class="actions"><button type="submit" class="primary">'+(line ? 'Desa la línia' : 'Afegeix a la comanda')+'</button>'+
+'</div></form>'
+    : '<p class="meta">Per demanar-lo, afegeix-li un proveïdor a sota.</p>';
+  return '<div class="sheet-head"><h2 id="order-dialog-title">'+name+'</h2><button type="button" id="close-order-dialog" aria-label="Tanca">✕</button></div>'+
+    '<section class="sheet-part"><h3>A la comanda</h3>'+orderPart+'</section>'+
+    '<section class="sheet-part"><h3>Fitxa de l’article</h3><form id="article-sheet"><div class="grid">'+
+      '<label>Nom<input name="name" required maxlength="120" value="'+name+'"></label>'+
+      '<label>Categoria<select name="category">'+options(data.categories,article.category_id,'Sense categoria')+'</select></label>'+
+      '<label>Unitat de compra<select name="unit">'+options(data.units.filter(unit => unit.id !== pendingUnit),article.unit_id,'Sense unitat')+'</select></label></div>'+
+      '<div class="actions"><button class="primary">Desa la fitxa</button></div></form></section>'+
+    '<section class="sheet-part"><h3>Proveïdors</h3>'+
+      offers.map(offer => '<div class="row item"><span>'+escape(byId('suppliers',offer.supplier_id)?.name)+' · '+escape(byId('units',offer.unit_id)?.name)+'</span>'+
+        '<button type="button" class="remove" data-unlink="'+escape(offer.supplier_id)+'">Desvincula</button></div>').join('')+
+      (data.suppliers.length ? '<form id="offer" class="sheet-offer"><div class="grid"><label>Proveïdor<select required name="supplier">'+options(data.suppliers,'','Tria un proveïdor')+'</select></label>'+
+        '<label>Unitat de compra<select required name="unit">'+options(data.units.filter(unit => unit.id !== pendingUnit),article.unit_id,'Tria una unitat')+'</select></label></div>'+
+        '<button>Afegeix el proveïdor</button></form>' : '<p class="meta">Encara no hi ha proveïdors. Crea’n un a Menú → Proveïdors.</p>')+
+    '</section>'+
+    '<section class="sheet-part"><h3>Últimes compres</h3>'+articlePurchases(article.id)+'</section>'+
+    '<div class="actions sheet-foot"><button type="button" data-archive-article="'+id+'">'+(article.archived ? 'Restaura' : 'Arxiva')+'</button>'+
+      (used ? '' : '<button type="button" class="remove" data-delete-article="'+id+'">Elimina</button>')+'</div>';
 }
 
 function orderOptions() {
@@ -1263,9 +1335,61 @@ async function pickOrderArticle(id, button) {
   await addDraftLine({article:id,supplier,unit,quantity:1},button);
 }
 
-function saveDraft(lines, button) {
-  return save({action:'draft',lines,revision:data.draft.revision},null,button,()=>'Esborrany desat.');
+// L'esborrany canvia a la pantalla de seguida i es desa al servidor en segon pla (sense tornar a carregar totes les dades).
+let draftPending = null;
+let draftSending = null;
+function saveDraft(lines, button, message = '') {
+  data.draft.lines = combineDraftLines(lines);
+  render();
+  if (message) notify(message);
+  draftPending = data.draft.lines;
+  if (!draftSending) draftSending = sendDraft().finally(() => { draftSending = null; });
+  return Promise.resolve();
 }
+
+async function sendDraft() {
+  let failures = 0;
+  while (draftPending) {
+    const lines = draftPending;
+    draftPending = null;
+    setSync('Desant…');
+    try {
+      await api({action:'draft',lines,revision:data.draft.revision});
+      data.draft.revision += 1;
+      failures = 0;
+    } catch (error) {
+      if (error.status === 409) {
+        // Un altre dispositiu ha canviat l'esborrany: es mostra el del servidor.
+        data = await api().catch(() => data);
+        render();
+        notify('L’esborrany ha canviat en un altre dispositiu. Revisa les línies i repeteix el canvi.',true);
+        draftPending = null;
+        break;
+      }
+      if (error.status >= 400 && error.status < 500) {
+        data = await api().catch(() => data);
+        render();
+        notify('No s’ha pogut desar l’últim canvi: '+error.message,true);
+        draftPending = null;
+        break;
+      }
+      // Sense connexió: es manté el canvi i es torna a provar.
+      draftPending = draftPending || lines;
+      failures += 1;
+      setSync('Sense connexió · es tornarà a provar');
+      await new Promise(resolve => setTimeout(resolve,Math.min(30000,3000*failures)));
+    }
+  }
+  setSync(readyStatus);
+}
+
+// Espera que s'hagi desat l'esborrany (abans de generar la comanda).
+async function flushDraft() {
+  while (draftSending) await draftSending;
+}
+window.addEventListener('beforeunload',event => {
+  if (draftPending || draftSending) event.preventDefault();
+});
 
 function history() {
   const orders = Map.groupBy(data.lines, line => line.order_id);
@@ -1355,12 +1479,215 @@ async function openOrderRecipient(form, button) {
   location.assign(link);
 }
 
+
+// ---- Albarans i compres ----
+const moneyFormat = new Intl.NumberFormat('ca-ES',{style:'currency',currency:'EUR'});
+const dayFormat = new Intl.DateTimeFormat('ca-ES',{dateStyle:'medium',timeZone:'UTC'});
+const dayOf = date => dayFormat.format(new Date(date+'T00:00:00Z'));
+
+// Article que més s'assembla al text de l'albarà (si n'hi ha un de clar).
+function guessArticle(name) {
+  const words = searchKey(name).replace(/[^a-z0-9 ]/g,' ').split(/\s+/).filter(word => word.length >= 3);
+  if (!words.length) return '';
+  let best = null, bestScore = 0;
+  for (const article of data.articles.filter(item => !item.archived)) {
+    const key = searchKey(article.name);
+    const own = key.replace(/[^a-z0-9 ]/g,' ').split(/\s+/).filter(word => word.length >= 3);
+    if (!own.length) continue;
+    const hits = own.filter(word => words.some(other => other.startsWith(word) || word.startsWith(other))).length;
+    const score = hits / own.length;
+    if (score > bestScore) { best = article; bestScore = score; }
+  }
+  return bestScore >= .99 ? best.id : '';
+}
+
+function invoiceCard() {
+  if (invoiceReview) return invoiceReviewForm();
+  return '<details class="card invoice-card"'+(readingInvoice ? ' open' : '')+'><summary>Llegeix un albarà</summary>'+
+    '<form id="read-purchase"><label>Foto o PDF de l’albarà (fins a 8 MB)<input name="file" type="file" accept="image/jpeg,image/png,image/webp,image/heic,application/pdf,.pdf" required></label>'+
+    '<button class="primary"'+(readingInvoice ? ' disabled' : '')+'>'+(readingInvoice ? 'Llegint l’albarà…' : 'Llegeix l’albarà')+'</button>'+
+    '<p class="meta">La IA llegeix el proveïdor, la data i cada línia. Després revises què es desa.</p></form></details>';
+}
+
+function invoiceReviewForm() {
+  const review = invoiceReview;
+  const names = '<datalist id="purchase-articles">'+data.articles.filter(item => !item.archived).map(item => '<option value="'+escape(item.name)+'">').join('')+'</datalist>';
+  const supplier = '<label>Proveïdor<select name="supplierId">'+options(data.suppliers,review.supplierId,review.supplierName ? 'Nou: '+review.supplierName : 'Tria un proveïdor')+'</select></label>';
+  const rows = review.rows.map((row,i) => {
+    const article = byId('articles',row.articleId);
+    return '<fieldset class="purchase-row'+(row.discard ? ' is-discarded' : '')+'" data-row="'+i+'"><legend>'+escape(row.name)+(row.uncertain ? ' <span class="error">· revisa-la</span>' : '')+'</legend>'+
+      '<div class="grid">'+
+      '<label class="purchase-article">Article<input name="article-'+i+'" list="purchase-articles" value="'+escape(article?.name ?? row.newName ?? '')+'" placeholder="Tria’l o escriu-ne un de nou"'+(row.discard ? ' disabled' : '')+'></label>'+
+      '<label>Quantitat<input name="quantity-'+i+'" type="number" step="any" inputmode="decimal" value="'+escape(row.quantity ?? '')+'"'+(row.discard ? ' disabled' : '')+'></label>'+
+      '<label>Unitat<input name="unit-'+i+'" maxlength="20" value="'+escape(row.unit)+'"'+(row.discard ? ' disabled' : '')+'></label>'+
+      '<label>Preu unitari (€)<input name="price-'+i+'" type="number" step="any" inputmode="decimal" value="'+escape(row.unitPrice ?? '')+'"'+(row.discard ? ' disabled' : '')+'></label>'+
+      '<label>Import (€)<input name="total-'+i+'" type="number" step="any" inputmode="decimal" value="'+escape(row.total ?? '')+'"'+(row.discard ? ' disabled' : '')+'></label></div>'+
+      '<div class="purchase-row-actions"><p class="meta" data-article-hint="'+i+'">'+articleHint(row)+'</p>'+
+      '<label class="purchase-check"><input type="checkbox" name="stock-'+i+'"'+(row.toStock ? ' checked' : '')+(row.discard ? ' disabled' : '')+'> Envia a GestoStock</label>'+
+      '<button type="button" data-discard-row="'+i+'">'+(row.discard ? 'Recupera la línia' : 'Descarta')+'</button></div></fieldset>';
+  }).join('');
+  return '<form id="purchase-review" class="card invoice-card"><h3>Revisa l’albarà</h3>'+
+    (review.warnings.length ? '<ul class="meta">'+review.warnings.map(item => '<li>'+escape(item)+'</li>').join('')+'</ul>' : '')+
+    '<div class="grid">'+supplier+'<label>Data<input name="date" type="date" required value="'+escape(review.date)+'"></label>'+
+    '<label>Número d’albarà<input name="invoiceNumber" maxlength="60" value="'+escape(review.invoiceNumber)+'"></label></div>'+
+    (review.dateText && !review.date ? '<p class="meta">Data llegida: '+escape(review.dateText)+'</p>' : '')+
+    rows+names+
+    '<div class="actions"><button class="primary">Desa la compra</button><button type="button" id="cancel-purchase">Cancel·la</button></div></form>';
+}
+
+function articleHint(row) {
+  if (row.discard) return 'Línia descartada: no es desarà.';
+  if (row.articleId) return 'Es desarà amb aquest article.';
+  if (row.newName) return 'No existeix: es crearà l’article «'+escape(row.newName)+'».';
+  return 'Tria l’article o escriu el nom d’un de nou.';
+}
+
+// Llegeix els valors del formulari de revisió a invoiceReview (per no perdre’ls en tornar a pintar).
+function syncInvoiceReview(form) {
+  if (!invoiceReview || !form) return;
+  const field = name => form.elements[name];
+  invoiceReview.supplierId = field('supplierId').value;
+  invoiceReview.date = field('date').value;
+  invoiceReview.invoiceNumber = field('invoiceNumber').value;
+  invoiceReview.rows.forEach((row,i) => {
+    if (row.discard) return;
+    const text = field('article-'+i).value.trim();
+    const match = data.articles.find(item => searchKey(item.name) === searchKey(text));
+    row.articleId = match?.id ?? '';
+    row.newName = match || !text ? '' : text;
+    const number = name => field(name).value === '' ? null : Number(field(name).value);
+    row.quantity = number('quantity-'+i);
+    row.unit = field('unit-'+i).value.trim();
+    row.unitPrice = number('price-'+i);
+    row.total = number('total-'+i);
+    row.toStock = field('stock-'+i).checked;
+  });
+}
+
+async function fileToBase64(file) {
+  // Les fotos grans es redueixen (màx. 2200 px) perquè la lectura sigui ràpida.
+  if (file.type.startsWith('image/') && file.size > 1_500_000) {
+    try {
+      const url = URL.createObjectURL(file);
+      const image = new Image();
+      image.src = url;
+      await image.decode();
+      const scale = Math.min(1,2200/Math.max(image.naturalWidth,image.naturalHeight));
+      const canvas = document.createElement('canvas');
+      canvas.width = Math.round(image.naturalWidth*scale);
+      canvas.height = Math.round(image.naturalHeight*scale);
+      canvas.getContext('2d').drawImage(image,0,0,canvas.width,canvas.height);
+      URL.revokeObjectURL(url);
+      return {image:canvas.toDataURL('image/jpeg',.85).split(',')[1], mimeType:'image/jpeg'};
+    } catch {
+      // Si no es pot reduir, s'envia tal com és.
+    }
+  }
+  const bytes = new Uint8Array(await file.arrayBuffer());
+  let binary = '';
+  for (let i = 0; i < bytes.length; i += 32768) binary += String.fromCharCode(...bytes.subarray(i,i+32768));
+  return {image:btoa(binary), mimeType:file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf') ? 'application/pdf' : file.type};
+}
+
+async function readPurchase(form, button) {
+  const file = form.elements.file.files[0];
+  if (!file || busy) return;
+  if (file.size > 8*1024*1024 && !file.type.startsWith('image/')) { notify('El fitxer fa més de 8 MB.',true); return; }
+  busy = true;
+  readingInvoice = true;
+  render();
+  notify('Llegint l’albarà amb IA… pot trigar uns segons.');
+  try {
+    const result = await api({action:'readInvoice',...await fileToBase64(file)});
+    invoiceReview = {...result, rows:result.rows.map(row => {
+      const articleId = row.articleId && byId('articles',row.articleId) ? row.articleId : guessArticle(row.name);
+      return {...row, articleId, newName:'', toStock:row.fish, discard:false};
+    })};
+    duplicateAllowed = false;
+    notify(result.rows.length ? 'Revisa les línies i desa la compra.' : 'No s’ha trobat cap línia a l’albarà.',!result.rows.length);
+  } catch (error) {
+    notify('No s’ha pogut llegir l’albarà: '+error.message,true);
+  } finally {
+    busy = false;
+    readingInvoice = false;
+    render();
+  }
+}
+
+async function savePurchaseReview(form, button) {
+  syncInvoiceReview(form);
+  const review = invoiceReview;
+  const kept = review.rows.filter(row => !row.discard);
+  if (!kept.length) { notify('Totes les línies estan descartades. Cancel·la la lectura o recupera’n alguna.',true); return; }
+  const missing = kept.findIndex(row => !row.articleId && !row.newName);
+  if (missing >= 0) { notify('A la línia «'+kept[missing].name+'» li falta l’article.',true); form.elements['article-'+review.rows.indexOf(kept[missing])]?.focus(); return; }
+  const payload = {action:'savePurchase', supplierId:review.supplierId, supplierName:review.supplierId ? '' : review.supplierName,
+    date:review.date, invoiceNumber:review.invoiceNumber.trim(), force:duplicateAllowed,
+    lines:kept.map(row => ({articleId:row.articleId, newArticle:row.newName, name:row.name, quantity:row.quantity, unit:row.unit,
+      unitPrice:row.unitPrice, total:row.total, kg:row.kg, units:row.units, toStock:row.toStock}))};
+  try {
+    await api(payload);
+  } catch (error) {
+    if (error.status === 409 && /ja s’havia desat/.test(error.message)) duplicateAllowed = true;
+    notify(error.message,true);
+    return;
+  }
+  const sent = kept.filter(row => row.toStock).length;
+  invoiceReview = null;
+  data = await api();
+  render();
+  notify('Compra desada.'+(sent ? ' '+sent+(sent === 1 ? ' línia enviada' : ' línies enviades')+' a GestoStock.' : ''));
+}
+
+// Últimes compres d'un article (per a la fitxa).
+function articlePurchases(articleId) {
+  const purchases = new Map((data.purchases || []).map(item => [item.id,item]));
+  const lines = (data.purchaseLines || []).filter(line => line.article_id === articleId && purchases.has(line.purchase_id))
+    .sort((a,b) => purchases.get(b.purchase_id).date.localeCompare(purchases.get(a.purchase_id).date)).slice(0,10);
+  if (!lines.length) return '<p class="meta">Encara no hi ha compres d’aquest article.</p>';
+  return lines.map(line => {
+    const purchase = purchases.get(line.purchase_id);
+    return '<div class="item purchase-line"><strong>'+escape(dayOf(purchase.date))+'</strong> · '+escape(purchase.supplier_name)+
+      '<div class="meta">'+[line.quantity !== null ? quantityFormat.format(line.quantity)+' '+escape(line.unit) : '',
+        line.unit_price !== null ? moneyFormat.format(line.unit_price)+(line.unit ? '/'+escape(line.unit) : '') : '',
+        line.total !== null ? 'Import '+moneyFormat.format(line.total) : ''].filter(Boolean).join(' · ')+'</div></div>';
+  }).join('');
+}
+
+function purchasesView() {
+  const lines = Map.groupBy(data.purchaseLines || [],line => line.purchase_id);
+  const stockLabel = {pending:'Pendent a GestoStock', done:'Partida creada', discarded:'Descartada a GestoStock'};
+  return '<article class="card main-card"><h2>Compres</h2>'+
+    ((data.purchases || []).map(purchase => {
+      const items = lines.get(purchase.id) || [];
+      const total = items.reduce((sum,line) => sum+(line.total ?? 0),0);
+      return '<div class="card"><button type="button" class="purchase-head" data-purchase="'+escape(purchase.id)+'" aria-expanded="'+(openPurchase === purchase.id)+'">'+
+        '<strong>'+escape(dayOf(purchase.date))+' · '+escape(purchase.supplier_name)+'</strong>'+
+        '<span class="meta">'+(purchase.invoice_number ? 'Albarà '+escape(purchase.invoice_number)+' · ' : '')+items.length+(items.length === 1 ? ' línia' : ' línies')+(total ? ' · '+moneyFormat.format(total) : '')+'</span></button>'+
+        (openPurchase === purchase.id ? items.map(line => '<div class="item"><strong>'+escape(byId('articles',line.article_id)?.name || line.name)+'</strong>'+
+          '<div class="meta">'+[escape(line.name), line.quantity !== null ? quantityFormat.format(line.quantity)+' '+escape(line.unit) : '',
+            line.unit_price !== null ? moneyFormat.format(line.unit_price) : '', line.total !== null ? moneyFormat.format(line.total) : '',
+            stockLabel[line.stock_status] || ''].filter(Boolean).join(' · ')+'</div></div>').join('') : '')+'</div>';
+    }).join('') || '<p class="meta">Encara no s’ha desat cap compra. Pots llegir un albarà des de la pantalla Nova comanda.</p>')+'</article>';
+}
+
+document.addEventListener('input',event => {
+  const form = event.target.form;
+  if (form?.id !== 'purchase-review' || !/^article-\d+$/.test(event.target.name)) return;
+  syncInvoiceReview(form);
+  const i = Number(event.target.name.split('-')[1]);
+  const hint = form.querySelector('[data-article-hint="'+i+'"]');
+  if (hint) hint.innerHTML = articleHint(invoiceReview.rows[i]);
+});
+
 function render() {
   menuButton.hidden = false;
   tabs.innerHTML = Object.entries(sections).map(([key,label]) => '<button data-tab="'+key+'" '+(section === key ? 'aria-current="page"' : '')+'>'+label+'</button>').join('');
-  content.innerHTML = section === 'order' ? order() : section === 'history' ? history() :
+  if (invoiceReview && section === 'order') syncInvoiceReview(document.querySelector('#purchase-review'));
+  content.innerHTML = section === 'order' ? order() : section === 'history' ? history() : section === 'purchases' ? purchasesView() :
     '<section class="card main-card"><h2>'+sections[section]+'</h2>'+catalog()+'</section>';
   if (section === 'order') orderOptions();
+  refreshArticleSheet();
 }
 
 document.addEventListener('click',async event => {
@@ -1415,7 +1742,10 @@ document.addEventListener('click',async event => {
     await save({action:target.deleteArticle ? 'deleteArticle' : 'archiveArticle',id:article.id,archived:!article.archived},() => {
       if (edit === article.id) edit = '';
       if (addingArticle === article.id) addingArticle = '';
-      if (target.deleteArticle) mergeSelection.delete(article.id);
+      if (target.deleteArticle) {
+        mergeSelection.delete(article.id);
+        if (sheetId === article.id) { sheetId = ''; document.querySelector('#order-dialog')?.close(); }
+      }
     },button,() => target.deleteArticle ? 'Article eliminat.' : article.archived ? 'Article restaurat.' : 'Article arxivat.');
   } else if (target.edit || Object.hasOwn(target,'cancel')) {
     edit = target.edit || '';
@@ -1433,9 +1763,30 @@ document.addEventListener('click',async event => {
     onlyOrdered = !onlyOrdered;
     render();
     document.querySelector('#order-visibility').focus();
+  } else if (target.step) {
+    const position = Number(target.stepIndex);
+    const lines = data.draft.lines.map((line,i) => i === position ? {...line,quantity:Math.round((line.quantity+Number(target.step))*1000)/1000} : line)
+      .filter(line => line.quantity > 0);
+    await saveDraft(combineDraftLines(lines),button);
+  } else if (target.discardRow) {
+    syncInvoiceReview(button.form);
+    const row = invoiceReview.rows[Number(target.discardRow)];
+    row.discard = !row.discard;
+    render();
+  } else if (button.id === 'cancel-purchase') {
+    if (!window.confirm('Vols deixar aquest albarà sense desar?')) return;
+    invoiceReview = null;
+    notify('');
+    render();
+  } else if (target.purchase) {
+    openPurchase = openPurchase === target.purchase ? '' : target.purchase;
+    render();
+  } else if (target.articleSheet) {
+    openOrderEditor(byId('articles',target.articleSheet),'');
   } else if (Object.hasOwn(target,'orderEditor')) {
     openOrderEditor(byId('articles',target.orderEditor),target.orderIndex);
   } else if (button.id === 'close-order-dialog') {
+    sheetId = '';
     button.closest('dialog').close();
   } else if (target.orderCatalog) {
     section = 'articles';
@@ -1455,6 +1806,7 @@ document.addEventListener('click',async event => {
   } else if (Object.hasOwn(target,'remove')) {
     await saveDraft(data.draft.lines.filter((_,index) => index !== Number(target.remove)),button);
   } else if (button.id === 'generate') {
+    await flushDraft();
     await save({action:'order',revision:data.draft.revision}, result => {
       onlyOrdered = false;
       orderCategory = '';
@@ -1607,7 +1959,7 @@ document.addEventListener('submit',async event => {
       orderOptions();
       document.querySelector('#order-matches button')?.focus();
     } else if (data.articles.some(article => article.archived && matchesArticleName(article,searchKey(orderSearch),true))) {
-      notify('Aquest article és a Articles → Mostra els arxivats. Restaura’l per afegir-lo.',true);
+      notify('Aquest article està arxivat. Restaura’l des de Menú → Eines del catàleg → Mostra els arxivats.',true);
     } else {
       creatingArticle = true;
       showMatches = false;
@@ -1648,6 +2000,12 @@ document.addEventListener('submit',async event => {
     await save({...values,action:section,id:edit},result => {
       edit = section === 'articles' ? result.id : '';
     },event.submitter);
+  } else if (form.id === 'read-purchase') {
+    await readPurchase(form,event.submitter);
+  } else if (form.id === 'purchase-review') {
+    await savePurchaseReview(form,event.submitter);
+  } else if (form.id === 'article-sheet') {
+    await save({...values,action:'articles',id:sheetId},null,event.submitter,()=>'Fitxa desada.');
   } else if (form.id === 'offer') {
     await save({...values,action:'offer',article:edit},null,event.submitter);
   } else if (form.id === 'quick-article') {
@@ -1677,7 +2035,7 @@ async function addDraftLine(values, button, fromCatalog = false) {
     notify('Revisa el total de la quantitat. La comanda admet fins a 100 línies.',true);
     return;
   }
-  await save({action:'draft',lines,revision:data.draft.revision},() => {
+  {
     if (fromCatalog) {
       addingArticle = '';
     } else {
@@ -1687,7 +2045,8 @@ async function addDraftLine(values, button, fromCatalog = false) {
       showMatches = false;
       creatingArticle = false;
     }
-  },button,()=>'Article afegit a la comanda.');
+  }
+  await saveDraft(lines,button,'Article afegit a la comanda.');
 }
 
 if (!initialData) setSync('Carregant…');
