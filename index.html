@@ -5,8 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="referrer" content="no-referrer">
 <title>GestoComandes</title>
-<link rel="icon" type="image/png" href="./icon.png?v=1.12.2">
-<link rel="apple-touch-icon" sizes="180x180" href="./icon.png?v=1.12.2">
+<link rel="icon" type="image/png" href="./icon.png?v=1.13.0">
+<link rel="apple-touch-icon" sizes="180x180" href="./icon.png?v=1.13.0">
 <style>:root{color-scheme:light;--bg:#f7f8fd;--tx:#28377e;--mu:#566598;--ln:#303f91;--surface:#fff;--soft:#f0f2fc;--border:#d4daf1;--field:#b6bfdf;--on:#fff;--red:#b42318;--green:#17734a}
 :root[data-theme=dark]{color-scheme:dark;--bg:#10152c;--tx:#e5e9ff;--mu:#adb8e5;--ln:#a1afff;--surface:#1b2447;--soft:#232f59;--border:#425080;--field:#6371a0;--on:#10152c;--red:#ff9992;--green:#84dbab}
 *{box-sizing:border-box}
@@ -199,7 +199,7 @@ img,video,canvas{max-width:100%;height:auto}
 <body>
 <main>
 <header class="topbar">
-  <div class="brand"><h1>GestoComandes</h1><div class="meta version">Versió 1.12.2<span id="sync-state" role="status"></span></div></div>
+  <div class="brand"><h1>GestoComandes</h1><div class="meta version">Versió 1.13.0<span id="sync-state" role="status"></span></div></div>
   <div class="top-actions">
     <div class="menu-anchor">
       <button id="menu-toggle" type="button" aria-label="Menú" aria-expanded="false" aria-controls="menu-panel" hidden><span aria-hidden="true">☰</span><span class="top-action-label" aria-hidden="true">Menú</span></button>
@@ -1748,7 +1748,7 @@ import {
   sendEmailVerification, sendPasswordResetEmail, signOut, reload, checkActionCode, applyActionCode, verifyPasswordResetCode, confirmPasswordReset
 } from 'https://www.gstatic.com/firebasejs/13.3.0/firebase-auth.js';
 
-async function startStaffApp(apiOrigin, mountApp) {
+async function startStaffApp(apiOrigin, mountApp, apiPath = '/api', firebaseAppName = 'tracacomandes', appLabel = 'GestoComandes') {
   const panel = document.querySelector('#login-panel');
   const form = document.querySelector('#login-form');
   const message = document.querySelector('#login-status');
@@ -1785,7 +1785,7 @@ async function startStaffApp(apiOrigin, mountApp) {
     if (!token) throw Object.assign(new Error('Torna a iniciar sessió.'),{status:401});
     const headers = {Authorization:'Bearer '+token};
     if (body) headers['Content-Type'] = 'application/json';
-    const response = await fetch(apiOrigin+'/api',{method:body ? 'POST' : 'GET',headers,
+    const response = await fetch(apiOrigin+apiPath,{method:body ? 'POST' : 'GET',headers,
       body:body ? JSON.stringify(body) : undefined,cache:'no-store',credentials:'omit'});
     const result = await response.json();
     if (!response.ok) throw Object.assign(new Error(result.error),{status:response.status});
@@ -1827,8 +1827,8 @@ async function startStaffApp(apiOrigin, mountApp) {
   try {
     const response = await fetch(apiOrigin+'/auth-config',{cache:'no-store',credentials:'omit'});
     if (!response.ok) throw new Error('Firebase configuration unavailable');
-    // Keep the existing Firebase app key so sessions survive the rename.
-    auth = getAuth(initializeApp(await response.json(),'tracacomandes'));
+    // GestoComandes manté el nom 'tracacomandes' perquè la sessió sobrevisqui al canvi de nom.
+    auth = getAuth(initializeApp(await response.json(),firebaseAppName));
     auth.languageCode = 'ca';
   } catch {
     show('L’accés de l’equip no està disponible. Torna-ho a provar més tard.');
@@ -1872,7 +1872,7 @@ async function startStaffApp(apiOrigin, mountApp) {
     void withFeedback(async () => {
       const code = emailActionCode(resetForm.elements.link.value,'resetPassword');
       if (!code) {
-        show('Enganxa l’enllaç complet del correu de restabliment de contrasenya de GestoComandes.');
+        show('Enganxa l’enllaç complet del correu de restabliment de contrasenya de '+appLabel+'.');
         return;
       }
       try {
@@ -1931,7 +1931,7 @@ async function startStaffApp(apiOrigin, mountApp) {
       if (!user && actionMode !== 'verifyEmail') return;
       const code = emailActionCode(repair.elements.link.value,'verifyEmail');
       if (!code) {
-        show('Enganxa l’enllaç complet del correu de verificació de GestoComandes.');
+        show('Enganxa l’enllaç complet del correu de verificació de '+appLabel+'.');
         return;
       }
       try {
