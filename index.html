@@ -5,8 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="referrer" content="no-referrer">
 <title>GestoCatalog</title>
-<link rel="icon" type="image/png" href="./icon.png?v=1.19.1">
-<link rel="apple-touch-icon" sizes="180x180" href="./icon.png?v=1.19.1">
+<link rel="icon" type="image/png" href="./icon.png?v=1.19.2">
+<link rel="apple-touch-icon" sizes="180x180" href="./icon.png?v=1.19.2">
 <style>:root{color-scheme:light;--bg:#f7f8fd;--tx:#28377e;--mu:#566598;--ln:#303f91;--surface:#fff;--soft:#f0f2fc;--border:#d4daf1;--field:#b6bfdf;--on:#fff;--red:#b42318;--green:#17734a}
 :root[data-theme=dark]{color-scheme:dark;--bg:#10152c;--tx:#e5e9ff;--mu:#adb8e5;--ln:#a1afff;--surface:#1b2447;--soft:#232f59;--border:#425080;--field:#6371a0;--on:#10152c;--red:#ff9992;--green:#84dbab}
 *{box-sizing:border-box}
@@ -55,9 +55,9 @@ button:disabled{opacity:.55;cursor:not-allowed}
 .top-actions button{gap:7px;min-height:42px;padding:8px 12px;white-space:nowrap}
 .top-actions button span:first-child{font-size:18px;line-height:1}
 .menu-anchor{position:relative}
-#menu-panel{position:absolute;top:calc(100% + 8px);right:0;z-index:5;width:192px;background:var(--surface);border:1px solid var(--border);border-radius:14px;box-shadow:0 12px 30px rgba(40,55,126,.15);padding:10px}
+#menu-panel{position:absolute;top:calc(100% + 8px);right:0;z-index:5;width:max-content;min-width:200px;background:var(--surface);border:1px solid var(--border);border-radius:14px;box-shadow:0 12px 30px rgba(40,55,126,.15);padding:10px}
 #tabs{display:grid;gap:6px;margin:0 0 6px}
-#menu-panel button{width:100%;justify-content:flex-start}
+#menu-panel button{width:100%;justify-content:flex-start;white-space:nowrap}
 @media(max-width:430px){
   .topbar,.top-actions{gap:6px}
   .top-actions button{font-size:14px;padding:7px 9px}
@@ -138,8 +138,8 @@ img,video,canvas{max-width:100%;height:auto}
 .order-editor{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:8px;padding:8px 10px 12px}
 .order-editor label:nth-child(3),.order-editor .actions,.order-editor [data-editor-error]{grid-column:1/-1}
 
-.order-list-filters{display:flex;flex-wrap:wrap;align-items:end;gap:8px;min-width:0}
-.order-list-filters label{width:min(100%,14rem)}
+.order-list-filters{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr) auto;align-items:end;gap:8px;min-width:0;flex:1 1 100%}
+.order-list-filters label{width:100%}
 .order-list-filters select{height:44px;min-height:44px}
 
 #order-dialog{width:min(460px,calc(100% - 24px));max-height:calc(100% - 24px);padding:18px;color:var(--tx);background:var(--surface);border:1px solid var(--border);border-radius:16px;overflow-wrap:anywhere}
@@ -147,7 +147,9 @@ img,video,canvas{max-width:100%;height:auto}
 #order-dialog .order-editor{padding:0}
 
 .order-lines .order-lookup{margin:14px 0 0}
-#order-add-search{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;align-items:end}
+#order-add-search{display:flex;gap:8px;align-items:end}
+#order-add-search label{flex:1 1 auto;min-width:0}
+#order-search-submit[hidden]{display:none}
 #order-add-search button{min-height:46px}
 
 .catalog-management{margin-bottom:10px}
@@ -251,7 +253,7 @@ img,video,canvas{max-width:100%;height:auto}
 <body>
 <main>
 <header class="topbar">
-  <div class="brand"><h1>GestoCatalog</h1><div class="meta version">Versió 1.19.1<span id="sync-state" role="status"></span></div></div>
+  <div class="brand"><h1>GestoCatalog</h1><div class="meta version">Versió 1.19.2<span id="sync-state" role="status"></span></div></div>
   <div class="top-actions">
     <div class="menu-anchor">
       <button id="menu-toggle" type="button" aria-label="Menú" aria-expanded="false" aria-controls="menu-panel" hidden><span aria-hidden="true">☰</span><span class="top-action-label" aria-hidden="true">Menú</span></button>
@@ -1263,7 +1265,7 @@ function order() {
     '<button id="cancel-quick" type="button">Cancel·la</button></div></form>' : '';
   const lookup = '<div class="order-lookup"><form id="order-add-search">'+
     '<label>Afegeix un article<input id="order-search" name="articleName" placeholder="Cerca pel nom" type="search" enterkeyhint="done" maxlength="120" required aria-controls="order-matches" autocomplete="off" value="'+escape(orderSearch)+'"></label>'+
-    '<button type="submit" id="order-search-submit" class="primary">Fet</button></form>'+
+    '<button type="submit" id="order-search-submit" class="primary" hidden>Crea l’article</button></form>'+
     '<div id="order-matches" class="order-matches" role="group" aria-label="Articles trobats" hidden></div>'+
     quickArticle+'</div>';
   return '<article class="card order-lines"><div class="order-list-heading"><div><h2>Nova comanda</h2>'+
@@ -1407,7 +1409,8 @@ function orderOptions() {
   }).join('');
   const query = searchKey(orderSearch.trim());
   const existing = query && data.articles.some(article => matchesArticleName(article,query,true));
-  document.querySelector('#order-search-submit').textContent = query && !existing ? 'Crea l’article' : 'Fet';
+  // Només cal el botó quan l'article no existeix (per crear-lo). Per triar-ne un, n'hi ha prou amb prémer-lo a la llista o la tecla de retorn.
+  document.querySelector('#order-search-submit').hidden = !(query && !existing);
 }
 
 function orderDefaults(article) {
