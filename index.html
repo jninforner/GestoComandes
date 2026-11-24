@@ -5,8 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="referrer" content="no-referrer">
 <title>GestoCatalog</title>
-<link rel="icon" type="image/png" href="./icon.png?v=1.25.2">
-<link rel="apple-touch-icon" sizes="180x180" href="./icon.png?v=1.25.2">
+<link rel="icon" type="image/png" href="./icon.png?v=1.25.3">
+<link rel="apple-touch-icon" sizes="180x180" href="./icon.png?v=1.25.3">
 <style>:root{color-scheme:light;--bg:#f7f8fd;--tx:#28377e;--mu:#566598;--ln:#303f91;--surface:#fff;--soft:#f0f2fc;--border:#d4daf1;--field:#b6bfdf;--on:#fff;--red:#b42318;--green:#17734a}
 :root[data-theme=dark]{color-scheme:dark;--bg:#10152c;--tx:#e5e9ff;--mu:#adb8e5;--ln:#a1afff;--surface:#1b2447;--soft:#232f59;--border:#425080;--field:#6371a0;--on:#10152c;--red:#ff9992;--green:#84dbab}
 *{box-sizing:border-box}
@@ -289,7 +289,7 @@ details.order-category[open]>summary{border-radius:11px 11px 0 0}
 <body>
 <main>
 <header class="topbar">
-  <div class="brand"><h1>GestoCatalog</h1><div class="meta version">Versió 1.25.2<span id="sync-state" role="status"></span></div></div>
+  <div class="brand"><h1>GestoCatalog</h1><div class="meta version">Versió 1.25.3<span id="sync-state" role="status"></span></div></div>
   <div class="top-actions">
     <div class="menu-anchor">
       <button id="menu-toggle" type="button" aria-label="Menú" aria-expanded="false" aria-controls="menu-panel" hidden><span aria-hidden="true">☰</span><span class="top-action-label" aria-hidden="true">Menú</span></button>
@@ -1070,7 +1070,7 @@ function articlesView() {
       archivedArticles ? archived+(archived === 1 ? ' article arxivat' : ' articles arxivats') : active+(active === 1 ? ' article actiu' : ' articles actius')+(archived ? ' · '+archived+' arxivats' : ''),
       'articles','<button type="button" id="article-archive-view" class="list-mode" aria-pressed="'+archivedArticles+'"><span aria-hidden="true">🗄︎</span> Només els arxivats</button>')+
     listLookup('articles')+
-    listTools('articles','<button type="button" class="primary" data-new-article>+ Nou article</button><button type="button" id="select-visible-articles">Marca tots els que es veuen</button>')+
+    listTools('articles','<button type="button" class="primary" data-new-article>+ Nou article</button><button type="button" id="select-visible-articles">'+selectVisibleLabel()+'</button>')+
     '<div id="article-merge-controls">'+articleMergeControls()+'</div>'+
     '<div id="list-articles">'+articleList('articles')+'</div>'+
     '<div class="list-extra">'+pdfImportCard()+'</div></article>';
@@ -1250,6 +1250,14 @@ const restoreIcon = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12a
 const pencilIcon = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16v4z"/><path d="M13.5 6.5l4 4"/></svg>';
 const trashIcon = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16"/><path d="M9 7V4h6v3"/><path d="M6 7l1 13h10l1-13"/><path d="M10 11v6M14 11v6"/></svg>';
 
+// El mateix botó marca els que es veuen o, si n'hi ha de marcats, els desmarca tots.
+function hasMarkedArticles() {
+  return data.articles.some(article => mergeSelection.has(article.id));
+}
+function selectVisibleLabel() {
+  return hasMarkedArticles() ? 'Desmarca tots' : 'Marca tots els que es veuen';
+}
+
 // Accions per als articles marcats: arxivar/restaurar, eliminar, assignar proveïdor i fusionar.
 function articleMergeControls() {
   const selected = data.articles.filter(article => mergeSelection.has(article.id));
@@ -1258,7 +1266,7 @@ function articleMergeControls() {
   return '<div class="bulk-bar"><strong>'+selected.length+(selected.length === 1 ? ' article marcat' : ' articles marcats')+'</strong>'+
     '<div class="actions"><button type="button" data-bulk="archive">'+(archivedArticles ? 'Restaura' : 'Arxiva')+'</button>'+
     '<button type="button" class="remove" data-bulk="delete">Elimina</button>'+
-    '<button type="button" id="clear-article-merge">Desmarca tots</button></div>'+
+    '</div>'+
     '<form id="bulk-supplier" class="grid"><label>Assigna un proveïdor<select name="supplier" required>'+options(data.suppliers,'','Tria un proveïdor')+'</select></label>'+
     '<label>Unitat de compra<select name="unit">'+options(units,'','La de cada article')+'</select></label>'+
     '<div class="bulk-submit"><button>Assigna</button></div></form>'+
@@ -2087,13 +2095,16 @@ document.addEventListener('click',async event => {
     else mergeSelection.add(target.selectArticle);
     refreshList('articles');
     document.querySelector('#article-merge-controls').innerHTML = articleMergeControls();
+    const selectButton = document.querySelector('#select-visible-articles');
+    if (selectButton) selectButton.textContent = selectVisibleLabel();
     [...document.querySelectorAll('[data-select-article]')].find(item => item.dataset.selectArticle === target.selectArticle)?.focus();
+  } else if (button.id === 'select-visible-articles' && hasMarkedArticles()) {
+    mergeSelection.clear();
+    render();
+    document.querySelector('#select-visible-articles')?.focus();
   } else if (button.id === 'select-visible-articles') {
     // Només els que es veuen: no compten els de categories replegades.
     [...content.querySelectorAll('[data-select-article]')].filter(item => !item.closest('details:not([open])')).forEach(item => mergeSelection.add(item.dataset.selectArticle));
-    render();
-  } else if (button.id === 'clear-article-merge') {
-    mergeSelection.clear();
     render();
   } else if (button.id === 'clear-bulk-log') {
     bulkLog.length = 0;
