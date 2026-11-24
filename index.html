@@ -5,8 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="referrer" content="no-referrer">
 <title>GestoCatalog</title>
-<link rel="icon" type="image/png" href="./icon.png?v=1.26.0">
-<link rel="apple-touch-icon" sizes="180x180" href="./icon.png?v=1.26.0">
+<link rel="icon" type="image/png" href="./icon.png?v=1.27.0">
+<link rel="apple-touch-icon" sizes="180x180" href="./icon.png?v=1.27.0">
 <style>:root{color-scheme:light;--bg:#f7f8fd;--tx:#28377e;--mu:#566598;--ln:#303f91;--surface:#fff;--soft:#f0f2fc;--border:#d4daf1;--field:#b6bfdf;--on:#fff;--red:#b42318;--green:#17734a}
 :root[data-theme=dark]{color-scheme:dark;--bg:#10152c;--tx:#e5e9ff;--mu:#adb8e5;--ln:#a1afff;--surface:#1b2447;--soft:#232f59;--border:#425080;--field:#6371a0;--on:#10152c;--red:#ff9992;--green:#84dbab}
 *{box-sizing:border-box}
@@ -255,6 +255,11 @@ details.order-category[open]>summary{border-radius:11px 11px 0 0}
   .list-tools .group-toggle{grid-column:2;grid-row:1;margin-left:0}
   .list-tools #select-visible-articles{grid-column:1/-1}
 }
+.order-state{display:inline-block;margin-inline-start:6px;color:var(--red);font-size:13px;font-weight:650}
+.order-state.is-sent{color:var(--green)}
+.order-day{margin-top:14px}
+.order-day>h3{margin:0;padding:7px 11px;background:var(--soft);border-radius:11px}
+.order-day>h3 .meta{font-weight:500;white-space:nowrap}
 
 .worker-profiles .worker-profile-item{border-top:1px solid var(--border);padding:10px 0}
 .worker-profile-item>summary,.worker-profile-inactive>summary{cursor:pointer;min-height:34px;display:flex;align-items:center;justify-content:space-between;gap:12px}
@@ -289,7 +294,7 @@ details.order-category[open]>summary{border-radius:11px 11px 0 0}
 <body>
 <main>
 <header class="topbar">
-  <div class="brand"><h1>GestoCatalog</h1><div class="meta version">Versió 1.26.0<span id="sync-state" role="status"></span></div></div>
+  <div class="brand"><h1>GestoCatalog</h1><div class="meta version">Versió 1.27.0<span id="sync-state" role="status"></span></div></div>
   <div class="top-actions">
     <div class="menu-anchor">
       <button id="menu-toggle" type="button" aria-label="Menú" aria-expanded="false" aria-controls="menu-panel" hidden><span aria-hidden="true">☰</span><span class="top-action-label" aria-hidden="true">Menú</span></button>
@@ -876,6 +881,9 @@ document.addEventListener('keydown',event => {
   menuButton.focus();
 });
 const dateFormat = new Intl.DateTimeFormat('ca-ES',{dateStyle:'medium',timeStyle:'short',timeZone:'Europe/Madrid'});
+// Historial agrupat per dia: capçalera amb el dia i, a cada comanda, només l'hora.
+const orderDayFormat = new Intl.DateTimeFormat('ca-ES',{weekday:'long',day:'numeric',month:'long',year:'numeric',timeZone:'Europe/Madrid'});
+const orderTimeFormat = new Intl.DateTimeFormat('ca-ES',{timeStyle:'short',timeZone:'Europe/Madrid'});
 const quantityFormat = new Intl.NumberFormat('ca-ES',{maximumSignificantDigits:15});
 let data;
 // La pantalla inicial és la lectura d'albarans.
@@ -898,6 +906,7 @@ let invoiceSupplier = '';
 let sharedArticleName = '';
 let sharedArticleId = '';
 let openOrder = '';
+let showAllOrders = false;
 let onlyOrdered = false;
 let orderCategory = '';
 let orderSupplier = '';
@@ -1726,16 +1735,44 @@ window.addEventListener('beforeunload',event => {
   if (draftPending || draftSending) event.preventDefault();
 });
 
+// Missatge enviat (comanda + proveïdor). No es pot saber si WhatsApp l'ha enviat: es marca a mà.
+function sentInfo(orderId, supplierId) {
+  return (data.sends || []).find(item => item.order_id === orderId && item.supplier_id === supplierId);
+}
+
+// Nom de qui ha fet la comanda (si és a la llista d'accessos) o el correu.
+function authorName(email) {
+  if (!email) return 'Autor sense registrar';
+  return data.staff?.find(item => item.email === email)?.name || email;
+}
+
 function history() {
-  const orders = Map.groupBy(data.lines, line => line.order_id);
-  return '<article class="card main-card"><h2>Historial de comandes</h2>'+
-    ([...orders].map(([id, lines]) => {
+  const me = data.me?.email ?? '';
+  const all = Map.groupBy(data.lines, line => line.order_id);
+  const others = [...all.values()].filter(lines => lines[0].author_email !== me).length;
+  // Per defecte, només les comandes pròpies. Els administradors poden veure les dels altres.
+  const showAll = showAllOrders && data.me?.admin;
+  const orders = [...all].filter(([, lines]) => showAll || lines[0].author_email === me);
+  const toggle = data.me?.admin && others ? '<label class="remember-contact"><input type="checkbox" data-show-all-orders'+(showAll ? ' checked' : '')+'> Mostra també les comandes d’altres usuaris ('+others+')</label>' : '';
+  // Les comandes ja arriben de la més nova a la més antiga: s'agrupen per dia (hora de Barcelona).
+  const days = Map.groupBy(orders,([, lines]) => orderDayFormat.format(new Date(lines[0].created_at)));
+  return '<article class="card main-card"><h2>Historial de comandes</h2>'+toggle+
+    ([...days].map(([day, dayOrders]) => '<section class="order-day"><h3>'+escape(day.charAt(0).toLocaleUpperCase('ca')+day.slice(1))+
+      ' <span class="meta">· '+dayOrders.length+' '+(dayOrders.length === 1 ? 'comanda' : 'comandes')+'</span></h3>'+
+      dayOrders.map(([id, lines]) => {
       const groups = Map.groupBy(lines,line => line.supplier_id);
-      return '<div class="item"><div class="row"><div><strong>'+escape(dateFormat.format(new Date(lines[0].created_at)))+'</strong><div class="meta">'+
+      const sent = [...groups.keys()].filter(supplier => sentInfo(id,supplier)).length;
+      const done = sent === groups.size;
+      const state = done ? '<span class="order-state is-sent">✓ Enviada</span>' :
+        '<span class="order-state">Pendent d’enviar'+(sent ? ' · '+sent+' de '+groups.size+' enviats' : '')+'</span>';
+      const mine = lines[0].author_email === me;
+      return '<div class="item"><div class="row"><div><strong>'+escape(orderTimeFormat.format(new Date(lines[0].created_at)))+'</strong> '+state+'<div class="meta">'+
         lines.length+' '+(lines.length === 1 ? 'línia' : 'línies')+' · '+groups.size+' '+(groups.size === 1 ? 'proveïdor' : 'proveïdors')+
-        '</div><div class="meta">'+(lines[0].author_email ? 'Desada per '+escape(lines[0].author_email) : 'Autor sense registrar')+'</div></div><button data-order="'+escape(id)+'" aria-expanded="'+(id === openOrder)+'">'+(id === openOrder ? 'Amaga' : 'Mostra els missatges')+'</button></div>'+
+        '</div>'+(mine ? '' : '<div class="meta">Feta per '+escape(authorName(lines[0].author_email))+'</div>')+'</div>'+
+        '<div class="actions"><button data-order="'+escape(id)+'" aria-expanded="'+(id === openOrder)+'">'+(id === openOrder ? 'Amaga' : 'Mostra els missatges')+'</button>'+
+        '<button class="remove" data-delete-order="'+escape(id)+'">Elimina</button></div></div>'+
         (id === openOrder ? [...groups.values()].map(messageCard).join('') : '')+'</div>';
-    }).join('') || empty('Encara no hi ha comandes desades.'))+'</article>';
+    }).join('')+'</section>').join('') || empty(all.size ? 'No has fet cap comanda.' : 'Encara no hi ha comandes desades.'))+'</article>';
 }
 
 function contactControls() {
@@ -1840,7 +1877,13 @@ function messageCard(lines) {
     contactControls()+'<label class="remember-contact"><input name="remember" type="checkbox"> Vols desar aquest contacte per a les properes comandes?</label>'+
     '<button class="primary" type="submit">Obre WhatsApp</button></form></details>' :
     '<a class="button whatsapp" href="'+escape(whatsappLink(phone,message))+'">Obre WhatsApp</a>';
-  return '<section class="item"><h3>'+escape(supplier.supplier)+'</h3><label>Missatge<textarea readonly rows="'+Math.min(13,lines.length+4)+'">'+escape(message)+'</textarea></label>'+
+  const sent = sentInfo(supplier.order_id,supplier.supplier_id);
+  const sentControls = sent
+    ? '<div class="row"><span class="order-state is-sent">✓ Enviat el '+escape(dateFormat.format(new Date(sent.sent_at)))+'</span>'+
+      '<button data-order-sent="'+escape(supplier.order_id)+'" data-supplier="'+escape(supplier.supplier_id)+'" data-sent="0">Desmarca</button></div>'
+    : '<div class="row"><span class="order-state">Pendent d’enviar</span>'+
+      '<button class="primary" data-order-sent="'+escape(supplier.order_id)+'" data-supplier="'+escape(supplier.supplier_id)+'" data-sent="1">Marca com a enviat</button></div>';
+  return '<section class="item"><h3>'+escape(supplier.supplier)+'</h3>'+sentControls+'<label>Missatge<textarea readonly rows="'+Math.min(13,lines.length+4)+'">'+escape(message)+'</textarea></label>'+
     '<div class="actions"><button data-copy>Copia el missatge</button>'+
     (!phone && current ? '<a href="'+escape(whatsappLink('',message))+'">Tria dins de WhatsApp</a>' : '')+'</div>'+chooser+'</section>';
 }
@@ -2274,6 +2317,21 @@ document.addEventListener('click',async event => {
       section = 'history';
       openOrder = result.id;
     },button);
+  } else if (target.orderSent) {
+    const markSent = target.sent === '1';
+    await save({action:'orderSent',id:target.orderSent,supplier:target.supplier,sent:markSent},null,button,
+      () => markSent ? 'Missatge marcat com a enviat.' : 'Missatge marcat com a pendent.');
+  } else if (target.deleteOrder) {
+    const id = target.deleteOrder;
+    const lines = data.lines.filter(line => line.order_id === id);
+    if (!lines.length) return;
+    const sent = new Set(lines.map(line => line.supplier_id).filter(supplier => sentInfo(id,supplier))).size;
+    const question = 'Vols eliminar la comanda del '+dateFormat.format(new Date(lines[0].created_at))+'?'+
+      (sent ? ' Ja n’has enviat '+(sent === 1 ? '1 missatge' : sent+' missatges')+'.' : '')+' No es podrà recuperar.';
+    if (!window.confirm(question)) return;
+    await save({action:'deleteOrder',id},() => {
+      if (openOrder === id) openOrder = '';
+    },button,() => 'Comanda eliminada.');
   } else if (target.order) {
     openOrder = openOrder === target.order ? '' : target.order;
     render();
@@ -2291,6 +2349,12 @@ document.addEventListener('click',async event => {
 });
 
 document.addEventListener('change', async event => {
+  if (Object.hasOwn(event.target.dataset,'showAllOrders')) {
+    showAllOrders = event.target.checked;
+    render();
+    content.querySelector('[data-show-all-orders]')?.focus();
+    return;
+  }
   if (event.target.dataset.listFilter) {
     listState[event.target.dataset.list][event.target.dataset.listFilter] = event.target.value;
     addingArticle = '';
