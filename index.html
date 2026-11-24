@@ -5,8 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="referrer" content="no-referrer">
 <title>GestoCatalog</title>
-<link rel="icon" type="image/png" href="./icon.png?v=1.28.0">
-<link rel="apple-touch-icon" sizes="180x180" href="./icon.png?v=1.28.0">
+<link rel="icon" type="image/png" href="./icon.png?v=1.29.1">
+<link rel="apple-touch-icon" sizes="180x180" href="./icon.png?v=1.29.1">
 <style>:root{color-scheme:light;--bg:#f7f8fd;--tx:#28377e;--mu:#566598;--ln:#303f91;--surface:#fff;--soft:#f0f2fc;--border:#d4daf1;--field:#b6bfdf;--on:#fff;--red:#b42318;--green:#17734a}
 :root[data-theme=dark]{color-scheme:dark;--bg:#10152c;--tx:#e5e9ff;--mu:#adb8e5;--ln:#a1afff;--surface:#1b2447;--soft:#232f59;--border:#425080;--field:#6371a0;--on:#10152c;--red:#ff9992;--green:#84dbab}
 *{box-sizing:border-box}
@@ -264,6 +264,8 @@ details.order-category[open]>summary{border-radius:11px 11px 0 0}
 .order-entry{padding:10px 12px;border-top:1px solid var(--border)}
 .order-day-head+.order-entry{border-top:0}
 .order-entry>.actions{margin-top:8px}
+.sheet-name{display:block;margin-bottom:12px}
+.sheet-pair{grid-template-columns:repeat(2,minmax(0,1fr))}
 
 .worker-profiles .worker-profile-item{border-top:1px solid var(--border);padding:10px 0}
 .worker-profile-item>summary,.worker-profile-inactive>summary{cursor:pointer;min-height:34px;display:flex;align-items:center;justify-content:space-between;gap:12px}
@@ -298,7 +300,7 @@ details.order-category[open]>summary{border-radius:11px 11px 0 0}
 <body>
 <main>
 <header class="topbar">
-  <div class="brand"><h1>GestoCatalog</h1><div class="meta version">Versió 1.28.0<span id="sync-state" role="status"></span></div></div>
+  <div class="brand"><h1>GestoCatalog</h1><div class="meta version">Versió 1.29.1<span id="sync-state" role="status"></span></div></div>
   <div class="top-actions">
     <div class="menu-anchor">
       <button id="menu-toggle" type="button" aria-label="Menú" aria-expanded="false" aria-controls="menu-panel" hidden><span aria-hidden="true">☰</span><span class="top-action-label" aria-hidden="true">Menú</span></button>
@@ -1421,8 +1423,9 @@ function catalogLine(article, offers) {
     '<div class="actions"><button class="primary">Afegeix la línia</button><button type="button" data-close-line>Cancel·la</button></div></form>';
 }
 
+// La unitat de compra és la de la fitxa de l'article; la del proveïdor només si l'article no en té.
 function offerUnit(article, offer) {
-  return offer && offer.unit_id !== pendingUnit ? offer.unit_id : article?.unit_id || '';
+  return article?.unit_id || (offer && offer.unit_id !== pendingUnit ? offer.unit_id : '');
 }
 
 function offerEditor(article) {
@@ -1608,35 +1611,37 @@ function articleSheet(article, index) {
   const offers = data.offers.filter(offer => offer.article_id === article.id);
   const suppliers = offers.map(offer => byId('suppliers',offer.supplier_id)).filter(Boolean);
   const defaults = orderDefaults(article);
-  const units = purchaseUnits();
   const name = escape(article.name);
   const id = escape(article.id);
   const used = data.draft.lines.some(item => item.article === article.id) || data.lines.some(item => item.article_id === article.id);
+  // La unitat és una sola: la de la fitxa de l'article (si es canvia, es desa a la fitxa).
+  // Tots els camps són del formulari «article-sheet» i es desen amb el botó «Desa» del final.
   const orderPart = article.archived ? '<p class="meta">Article arxivat. Restaura’l per poder-lo demanar.</p>' :
-    suppliers.length && units.length ? '<form class="order-editor" data-edit-quantity="'+index+'" data-article="'+id+'"><div class="grid">'+
-      '<label>Quantitat<input name="quantity" type="number" step="any" inputmode="decimal" required value="'+escape(line?.quantity ?? 1)+'"></label>'+
-      '<label>Unitat<select name="unit" required>'+options(units,line?.unit || defaults.unit,'Tria una unitat')+'</select></label>'+
-      '<label>Proveïdor<select name="supplier" required>'+options(suppliers,line?.supplier || defaults.supplier,'Tria un proveïdor')+'</select></label></div>'+
-      '<div class="actions"><button type="submit" class="primary">'+(line ? 'Desa la línia' : 'Afegeix a la comanda')+'</button>'+
-'</div></form>'
-    : '<p class="meta">Per demanar-lo, tria-li un proveïdor a sota i desa la fitxa.</p>';
+    suppliers.length ? '<div class="grid">'+
+      '<label>Quantitat<input form="article-sheet" name="quantity" type="number" min="0" step="any" inputmode="decimal"'+(line ? ' required' : '')+' value="'+escape(line?.quantity ?? '')+'"'+(line ? '' : ' placeholder="No és a la comanda"')+'></label>'+
+      '<label>Proveïdor<select form="article-sheet" name="supplier"'+(line ? ' required' : '')+'>'+options(suppliers,line?.supplier || defaults.supplier,'Tria un proveïdor')+'</select></label></div>'+
+      (line ? '' : '<p class="meta">Escriu una quantitat si el vols afegir a la comanda.</p>')
+    : '<p class="meta">Per demanar-lo, tria-li un proveïdor a sota i desa.</p>';
   return '<div class="sheet-head"><h2 id="order-dialog-title">'+name+'</h2><button type="button" id="close-order-dialog" aria-label="Tanca">✕</button></div>'+
     (sheetFromTools ? '' : '<section class="sheet-part"><h3>A la comanda</h3>'+orderPart+'</section>')+
-    '<section class="sheet-part"><h3>Fitxa de l’article</h3><form id="article-sheet"><div class="grid">'+
-      '<label>Nom<input name="name" required maxlength="120" value="'+name+'"></label>'+
+    '<section class="sheet-part"><h3>Fitxa de l’article</h3><form id="article-sheet" data-line-index="'+(line ? index : '')+'">'+
+      '<label class="sheet-name">Nom<input name="name" required maxlength="120" value="'+name+'"></label>'+
+      '<div class="grid sheet-pair">'+
       '<label>Categoria<select name="category">'+options(data.categories,article.category_id,'Sense categoria')+'</select></label>'+
-      '<label>Unitat de compra<select name="unit">'+options(data.units.filter(unit => unit.id !== pendingUnit),article.unit_id,'Sense unitat')+'</select></label></div>'+
+      '<label>Unitat<select name="unit" required>'+options(purchaseUnits(),line?.unit || article.unit_id,'Tria una unitat')+'</select></label></div>'+
       '</form></section>'+
     '<section class="sheet-part"><h3>Proveïdors</h3>'+
-      offers.map(offer => '<div class="row item"><span>'+escape(byId('suppliers',offer.supplier_id)?.name)+' · '+escape(byId('units',offer.unit_id)?.name)+'</span>'+
+      offers.map(offer => '<div class="row item"><span>'+escape(byId('suppliers',offer.supplier_id)?.name)+'</span>'+
         '<button type="button" class="remove" data-unlink="'+escape(offer.supplier_id)+'">Desvincula</button></div>').join('')+
-      // El proveïdor triat aquí es desa amb el botó «Desa la fitxa».
-      (data.suppliers.length ? '<div class="grid sheet-offer"><label>'+(offers.length ? 'Afegeix un proveïdor' : 'Proveïdor')+'<select form="article-sheet" name="offerSupplier">'+
-        options(data.suppliers.filter(supplier => !offers.some(offer => offer.supplier_id === supplier.id)),'','Tria un proveïdor')+'</select></label>'+
-        '<label>Unitat de compra del proveïdor<select form="article-sheet" name="offerUnit">'+options(data.units.filter(unit => unit.id !== pendingUnit),article.unit_id,'Tria una unitat')+'</select></label></div>' : '<p class="meta">Encara no hi ha proveïdors. Crea’n un a Menú → Proveïdors.</p>')+
+      // El proveïdor triat aquí es desa amb el botó «Desa».
+      (data.suppliers.length ? '<label>'+(offers.length ? 'Afegeix un proveïdor' : 'Proveïdor')+'<select form="article-sheet" name="offerSupplier">'+
+        options(data.suppliers.filter(supplier => !offers.some(offer => offer.supplier_id === supplier.id)),'','Tria un proveïdor')+'</select></label>' :
+        '<p class="meta">Encara no hi ha proveïdors. Crea’n un a Menú → Proveïdors.</p>')+
     '</section>'+
     '<section class="sheet-part"><h3>Últimes compres</h3>'+articlePurchases(article.id)+'</section>'+
-    '<div class="actions sheet-foot"><button class="primary" form="article-sheet">Desa la fitxa</button><button type="button" data-archive-article="'+id+'">'+(article.archived ? 'Restaura' : 'Arxiva')+'</button>'+
+    '<div class="actions sheet-foot"><button class="primary" form="article-sheet">Desa</button>'+
+      // Arxivar només des de Menú → Articles.
+      (sheetFromTools ? '<button type="button" data-archive-article="'+id+'">'+(article.archived ? 'Restaura' : 'Arxiva')+'</button>' : '')+
       (used ? '' : '<button type="button" class="remove" data-delete-article="'+id+'">Elimina</button>')+'</div>';
 }
 
@@ -2611,31 +2616,52 @@ document.addEventListener('submit',async event => {
       form.closest('dialog')?.close();
     },event.submitter);
   } else if (form.id === 'article-sheet') {
-    // En desar la fitxa es desa també el proveïdor triat, i el diàleg d'edició es tanca.
+    // Un sol botó «Desa»: el proveïdor nou, la fitxa de l'article i la línia de la comanda.
     const id = sheetId;
     const addToOrder = sheetAddToOrder === id;
     const showError = message => notify(message,true);
-    const {offerSupplier,offerUnit,...article} = values;
-    if (offerSupplier && !offerUnit) { showError('Tria la unitat de compra del proveïdor.'); return; }
+    const {offerSupplier,quantity:quantityText,supplier,...article} = values;
+    const lineIndex = form.dataset.lineIndex;
+    const hasOrderPart = Boolean(form.elements.quantity);
+    const quantity = Number(quantityText);
+    const wantsLine = hasOrderPart && (lineIndex !== '' || String(quantityText ?? '').trim() !== '');
+    if (!article.unit) { showError('Tria la unitat de l’article.'); form.elements.unit.focus(); return; }
+    if (wantsLine && (!Number.isFinite(quantity) || quantity <= 0)) {
+      form.elements.quantity.focus();
+      showError('La quantitat ha de ser un número més gran que zero.');
+      return;
+    }
+    if (wantsLine && !supplier) { showError('Tria el proveïdor de la comanda.'); form.elements.supplier.focus(); return; }
     if (busy) return;
+    await flushDraft();
     if (offerSupplier) {
       try {
-        await api({action:'offer',article:id,supplier:offerSupplier,unit:offerUnit});
+        await api({action:'offer',article:id,supplier:offerSupplier,unit:article.unit});
       } catch (failure) {
         showError('No s’ha pogut desar el proveïdor. '+(failure.message || ''));
         return;
       }
     }
-    // Si l'article no té unitat, es fa servir la del proveïdor.
-    if (!article.unit && offerUnit) article.unit = offerUnit;
+    let saved = false;
     await save({...article,action:'articles',id},() => {
+      saved = true;
       sheetId = '';
       sheetAddToOrder = '';
       form.closest('dialog')?.close();
-    },event.submitter,()=>'Fitxa desada.');
-    if (addToOrder && !sheetId && byId('articles',id)) {
-      const {supplier,unit} = orderDefaults(byId('articles',id));
-      if (supplier && unit) {
+    },event.submitter,()=>'Desat.');
+    if (!saved || !byId('articles',id)) return;
+    if (wantsLine) {
+      const lineSupplier = supplier;
+      if (lineIndex !== '') {
+        const lines = data.draft.lines.map((line,position) => position === Number(lineIndex) && line.article === id ? {...line,quantity,unit:article.unit,supplier:lineSupplier} : line);
+        await saveDraft(combineDraftLines(lines),null,'Desat.');
+      } else {
+        await addDraftLine({article:id,supplier:lineSupplier,unit:article.unit,quantity},null);
+      }
+      focusOrderArticle(id);
+    } else if (addToOrder) {
+      const defaults = orderDefaults(byId('articles',id));
+      if (defaults.supplier && defaults.unit) {
         await pickOrderArticle(id);
         focusOrderArticle(id);
       }
