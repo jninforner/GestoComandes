@@ -5,8 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="referrer" content="no-referrer">
 <title>GestoCatalog</title>
-<link rel="icon" type="image/png" href="./icon.png?v=1.30.4">
-<link rel="apple-touch-icon" sizes="180x180" href="./icon.png?v=1.30.4">
+<link rel="icon" type="image/png" href="./icon.png?v=1.31.0">
+<link rel="apple-touch-icon" sizes="180x180" href="./icon.png?v=1.31.0">
 <style>:root{color-scheme:light;--bg:#f7f8fd;--tx:#28377e;--mu:#566598;--ln:#303f91;--surface:#fff;--soft:#f0f2fc;--border:#d4daf1;--field:#b6bfdf;--on:#fff;--red:#b42318;--green:#17734a}
 :root[data-theme=dark]{color-scheme:dark;--bg:#10152c;--tx:#e5e9ff;--mu:#adb8e5;--ln:#a1afff;--surface:#1b2447;--soft:#232f59;--border:#425080;--field:#6371a0;--on:#10152c;--red:#ff9992;--green:#84dbab}
 *{box-sizing:border-box}
@@ -216,6 +216,8 @@ img,video,canvas{max-width:100%;height:auto}
 .article-open .meta{font-size:14px}
 .icon-button{min-width:0;width:36px;min-height:36px;padding:0}
 .catalog-row{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:6px;border-top:1px solid var(--border);padding:2px 0}
+.catalog-row.with-move{grid-template-columns:minmax(0,1fr) auto auto}
+.catalog-row.with-move .order-steps{padding:0}
 .catalog-name{min-width:0;padding:6px 4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .icon-button svg{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
 .icon-button.remove{border-color:var(--red)}
@@ -317,7 +319,7 @@ details.order-category[open]>summary{border-radius:11px 11px 0 0}
 <body>
 <main>
 <header class="topbar">
-  <div class="brand"><h1>GestoCatalog</h1><div class="meta version">Versió 1.30.4<span id="sync-state" role="status"></span></div></div>
+  <div class="brand"><h1>GestoCatalog</h1><div class="meta version">Versió 1.31.0<span id="sync-state" role="status"></span></div></div>
   <div class="top-actions">
     <div class="menu-anchor">
       <button id="menu-toggle" type="button" aria-label="Menú" aria-expanded="false" aria-controls="menu-panel" hidden><span aria-hidden="true">☰</span><span class="top-action-label" aria-hidden="true">Menú</span></button>
@@ -1072,7 +1074,7 @@ function openNewArticleDialog(name, context) {
   const supplier = context === 'order' ? orderSupplier : supplierFilter;
   dialog.innerHTML = '<div class="sheet-head"><h2 id="order-dialog-title">Nou article</h2><button type="button" id="close-order-dialog" aria-label="Tanca">✕</button></div>'+
     '<form id="quick-article" data-context="'+context+'"><label class="full">Nom<input name="name" required maxlength="120" value="'+escape(name)+'"></label><div class="grid">'+
-    '<label>Categoria<select name="category" required>'+options([...data.categories].sort((a,b) => a.name.localeCompare(b.name,'ca')),category,'Tria una categoria')+'</select></label>'+
+    '<label>Categoria<select name="category" required>'+options(data.categories,category,'Tria una categoria')+'</select></label>'+
     '<label>Proveïdor<select name="supplier" required>'+options(data.suppliers,supplier,'Tria un proveïdor')+'</select></label>'+
     '<label>Unitat de compra<select name="unit" required>'+options(purchaseUnits(),'','Tria una unitat')+'</select></label></div></form>'+
     '<div class="actions sheet-foot">'+(!data.categories.length ? '<button type="button" data-tab="categories">Crea una categoria</button>' : data.suppliers.length ? '<button class="primary" form="quick-article">'+(context === 'order' ? 'Crea i afegeix a la comanda' : 'Crea l’article')+'</button>' :
@@ -1325,7 +1327,7 @@ function articleMergeControls() {
     '<label>Unitat de compra<select name="unit">'+options(units,'','La de cada article')+'</select></label>'+
     '<div class="bulk-submit"><button>Assigna</button></div></form>'+
     '<form id="bulk-category" class="grid"><label>Assigna una categoria<select name="category" required>'+
-      options([...data.categories].sort((a,b) => a.name.localeCompare(b.name,'ca')),'','Tria una categoria')+'<option value="-">Sense categoria</option></select></label>'+
+      options(data.categories,'','Tria una categoria')+'<option value="-">Sense categoria</option></select></label>'+
     '<div class="bulk-submit"><button>Assigna</button></div></form>'+
     (selected.length > 1 ? '<form id="merge-articles" class="grid"><label>Fusiona’ls en un sol article<select name="target" required>'+
       options(selected,'','Tria l’article que es conservarà')+'</select></label><div class="bulk-submit"><button>Fusiona '+selected.length+' articles</button></div></form>' : '')+
@@ -1375,15 +1377,21 @@ async function runBulk(payloads, button, describe) {
 function catalogRows() {
   const isSupplier = section === 'suppliers';
   const names = {suppliers:'proveïdor',units:'unitat',categories:'categoria'};
-  const rows = data[section].filter(item => item.id !== pendingUnit).map(item => {
+  const list = data[section].filter(item => item.id !== pendingUnit);
+  const rows = list.map((item,index) => {
     const detail = isSupplier ? [item.contact,item.phone ? '+'+item.phone : 'Tria el contacte a WhatsApp'].filter(Boolean).join(' · ') : '';
     // Proveïdors i categories: prement el nom es mostren els seus articles. Unitats: només el nom.
     const label = '<strong>'+escape(item.name)+'</strong>'+(detail ? '<span class="meta"> · '+escape(detail)+'</span>' : '');
     const full = item.name+(detail ? ' · '+detail : '');
-    return '<div class="catalog-row">'+
+    // Categories: ▲▼ per canviar-ne l'ordre (el de les llistes, els filtres i el missatge als proveïdors).
+    const move = section === 'categories'
+      ? '<span class="order-steps"><button type="button" class="order-step" data-category-move="-1" data-category-id="'+escape(item.id)+'"'+(index === 0 ? ' disabled' : '')+' aria-label="Puja '+escape(item.name)+'">▲</button>'+
+        '<button type="button" class="order-step" data-category-move="1" data-category-id="'+escape(item.id)+'"'+(index === list.length-1 ? ' disabled' : '')+' aria-label="Baixa '+escape(item.name)+'">▼</button></span>'
+      : '';
+    return '<div class="catalog-row'+(move ? ' with-move' : '')+'">'+
       (isSupplier || section === 'categories'
         ? '<button type="button" class="article-open" data-browse-articles="'+escape(item.id)+'" title="Mostra els articles de '+escape(full)+'">'+label+'</button>'
-        : '<span class="catalog-name" title="'+escape(full)+'">'+label+'</span>')+
+        : '<span class="catalog-name" title="'+escape(full)+'">'+label+'</span>')+move+
       '<button type="button" class="icon-button" data-catalog-edit="'+escape(item.id)+'" title="Edita" aria-haspopup="dialog" aria-label="Edita '+escape(item.name)+'">'+pencilIcon+'</button></div>';
   });
   return rows.join('') || empty('Cap '+names[section]+' per mostrar.');
@@ -1472,7 +1480,7 @@ const byName = (a,b) => a.name.localeCompare(b.name,'ca',{sensitivity:'base'});
 
 function listFilters(mode) {
   const state = listState[mode];
-  return '<label>Categoria<select data-list-filter="category" data-list="'+mode+'">'+options([...data.categories].sort(byName),state.category,'Totes')+
+  return '<label>Categoria<select data-list-filter="category" data-list="'+mode+'">'+options(data.categories,state.category,'Totes')+
       '<option value="-"'+(state.category === '-' ? ' selected' : '')+'>Sense categoria</option></select></label>'+
     '<label>Proveïdor<select data-list-filter="supplier" data-list="'+mode+'">'+options([...data.suppliers].sort(byName),state.supplier,'Tots')+'</select></label>';
 }
@@ -1504,7 +1512,7 @@ function articleList(mode) {
     return !(mode === 'order' && onlyOrdered && !ordered);
   });
   const groups = Map.groupBy(articles,article => article.category_id || '');
-  const html = [...groups].sort(([a],[b]) => categoryName(a).localeCompare(categoryName(b),'ca')).map(([category,items]) => {
+  const html = [...groups].sort(([a],[b]) => categoryRank(a)-categoryRank(b)).map(([category,items]) => {
     items.sort(byName);
     const marked = items.filter(article => mode === 'order' ? byArticle.has(article.id) : mergeSelection.has(article.id)).length;
     const rows = items.map(article => {
@@ -1575,6 +1583,13 @@ function matchesOrderCategory(article) {
 
 function categoryName(id) {
   return byId('categories',id)?.name || 'Sense categoria';
+}
+
+// Posició de la categoria en l'ordre triat a la pantalla Categories (el servidor ja les envia ordenades).
+// «Sense categoria» (o una que ja no existeix) va al final.
+function categoryRank(id) {
+  const index = data.categories.findIndex(item => item.id === id);
+  return index < 0 ? Infinity : index;
 }
 
 function orderListRow(article,line,index) {
@@ -1955,11 +1970,11 @@ function ofArticle(name) {
 
 function supplierMessage(lines, current, recipient) {
   const supplier = lines[0];
-  // Agrupats per categoria (ordre alfabètic, «Sense categoria» al final), articles en ordre alfabètic
+  // Agrupats per categoria (en l'ordre de la pantalla Categories, «Sense categoria» al final), articles en ordre alfabètic
   // i una línia en blanc entre categories.
   const sort = (a,b) => a.localeCompare(b,'ca',{sensitivity:'base'});
   const categories = Map.groupBy(lines,line => byId('articles',line.article_id)?.category_id || '');
-  const articles = [...categories].sort(([a],[b]) => !a ? 1 : !b ? -1 : sort(categoryName(a),categoryName(b)))
+  const articles = [...categories].sort(([a],[b]) => categoryRank(a)-categoryRank(b))
     .map(([, items]) => [...items].sort((a,b) => sort(a.article,b.article))
       .map(line => '• '+quantityFormat.format(line.quantity)+' '+unitLabel(line.unit,Number(line.quantity))+' '+ofArticle(line.article)).join('\n'))
     .join('\n\n');
@@ -2489,6 +2504,8 @@ document.addEventListener('click',async event => {
     openOrderEditor(byId('articles',target.articleSheet),'',Object.hasOwn(target,'fromTools'));
   } else if (Object.hasOwn(target,'orderEditor')) {
     openOrderEditor(byId('articles',target.orderEditor),target.orderIndex);
+  } else if (target.categoryMove) {
+    await moveCategory(target.categoryId,Number(target.categoryMove));
   } else if (target.catalogEdit) {
     openCatalogEditor(byId(section,target.catalogEdit));
   } else if (button.id === 'close-order-dialog' || button.id === 'close-order-dialog-foot') {
@@ -2660,6 +2677,23 @@ document.addEventListener('change', async event => {
     document.querySelector('#offer select[name=unit]').value = offer && offer.unit_id !== pendingUnit ? offer.unit_id : byId('articles',edit)?.unit_id || '';
   }
 });
+
+// Canvia l'ordre d'una categoria (una posició amunt o avall). Es veu a l'instant i es desa en segon pla.
+let categoryOrderSaving = Promise.resolve();
+async function moveCategory(id, step) {
+  const list = data.categories;
+  const from = list.findIndex(item => item.id === id);
+  const to = from + step;
+  if (from < 0 || to < 0 || to >= list.length) return;
+  [list[from],list[to]] = [list[to],list[from]];
+  refreshCatalogRows();
+  document.querySelector('[data-category-id="'+CSS.escape(id)+'"][data-category-move="'+step+'"]:not(:disabled)')?.focus();
+  const ids = list.map(item => item.id);
+  categoryOrderSaving = categoryOrderSaving.then(() => api({action:'orderCategories',ids})).catch(async error => {
+    notify(error.message || 'No s’ha pogut desar l’ordre de les categories.',true);
+    try { data = await api(); render(); } catch { /* es manté la vista */ }
+  });
+}
 
 function refreshCatalogRows() {
   if (section === 'articles') refreshList('articles');
