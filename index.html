@@ -5,8 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="referrer" content="no-referrer">
 <title>GestoCatalog</title>
-<link rel="icon" type="image/png" href="./icon.png?v=1.23.1">
-<link rel="apple-touch-icon" sizes="180x180" href="./icon.png?v=1.23.1">
+<link rel="icon" type="image/png" href="./icon.png?v=1.24.0">
+<link rel="apple-touch-icon" sizes="180x180" href="./icon.png?v=1.24.0">
 <style>:root{color-scheme:light;--bg:#f7f8fd;--tx:#28377e;--mu:#566598;--ln:#303f91;--surface:#fff;--soft:#f0f2fc;--border:#d4daf1;--field:#b6bfdf;--on:#fff;--red:#b42318;--green:#17734a}
 :root[data-theme=dark]{color-scheme:dark;--bg:#10152c;--tx:#e5e9ff;--mu:#adb8e5;--ln:#a1afff;--surface:#1b2447;--soft:#232f59;--border:#425080;--field:#6371a0;--on:#10152c;--red:#ff9992;--green:#84dbab}
 *{box-sizing:border-box}
@@ -231,6 +231,14 @@ img,video,canvas{max-width:100%;height:auto}
 #quick-article label.full{display:grid;margin-bottom:12px}
 #quick-article .grid{grid-template-columns:repeat(auto-fit,minmax(min(100%,160px),1fr))}
 .order-list-row.just-added{outline:3px solid var(--accent,#7b8cf0);outline-offset:2px;border-radius:10px;transition:outline-color .3s}
+details.order-category>summary{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:9px 12px;background:var(--soft);border-radius:11px;font-weight:700;font-size:15px;cursor:pointer;list-style:none}
+details.order-category>summary::-webkit-details-marker{display:none}
+details.order-category>summary::before{content:'▸';margin-right:4px;transition:transform .15s}
+details.order-category[open]>summary::before{transform:rotate(90deg)}
+details.order-category>summary .group-name{flex:1 1 auto}
+details.order-category>summary .meta{font-weight:400;font-size:13px}
+details.order-category[open]>summary{border-radius:11px 11px 0 0}
+.group-tools{display:flex;justify-content:flex-end;margin-top:10px}
 
 .worker-profiles .worker-profile-item{border-top:1px solid var(--border);padding:10px 0}
 .worker-profile-item>summary,.worker-profile-inactive>summary{cursor:pointer;min-height:34px;display:flex;align-items:center;justify-content:space-between;gap:12px}
@@ -265,7 +273,7 @@ img,video,canvas{max-width:100%;height:auto}
 <body>
 <main>
 <header class="topbar">
-  <div class="brand"><h1>GestoCatalog</h1><div class="meta version">Versió 1.23.1<span id="sync-state" role="status"></span></div></div>
+  <div class="brand"><h1>GestoCatalog</h1><div class="meta version">Versió 1.24.0<span id="sync-state" role="status"></span></div></div>
   <div class="top-actions">
     <div class="menu-anchor">
       <button id="menu-toggle" type="button" aria-label="Menú" aria-expanded="false" aria-controls="menu-panel" hidden><span aria-hidden="true">☰</span><span class="top-action-label" aria-hidden="true">Menú</span></button>
@@ -1019,7 +1027,7 @@ function catalog() {
     (isArticle ? pdfImportCard() : '')+
     '<article class="card"><h2>'+{suppliers:'Proveïdors registrats',articles:'Articles registrats',units:'Unitats registrades',categories:'Categories registrades'}[section]+'</h2>'+filters+(isArticle ?
       '<div class="actions catalog-management"><button type="button" class="primary" data-new-article>+ Nou article</button><button type="button" id="article-archive-view" aria-pressed="'+archivedArticles+'">'+(archivedArticles ? 'Mostra els articles actius' : 'Mostra els arxivats')+'</button>'+
-      '<button type="button" id="select-visible-articles">Marca tots els que es veuen</button></div>'+
+      '<button type="button" id="select-visible-articles">Marca tots els que es veuen</button>'+groupToggleButton('articles')+'</div>'+
       '<div id="article-merge-controls">'+articleMergeControls()+'</div>' : '')+'<div id="catalog-rows">'+
     catalogRows()+'</div></article>';
 }
@@ -1252,7 +1260,7 @@ function catalogRows() {
   const query = searchKey(articleSearch);
   const added = isArticle ? draftArticleIds() : null;
   const names = {suppliers:'proveïdor',articles:'article',units:'unitat',categories:'categoria'};
-  return data[section].filter(item => item.id !== pendingUnit).map(item => {
+  const rowHtml = item => {
     const linked = isArticle ? data.offers.filter(offer => offer.article_id === item.id) : [];
     if (isArticle && (Boolean(item.archived) !== archivedArticles || (categoryFilter && (item.category_id || '-') !== categoryFilter) ||
         (supplierFilter && !linked.some(offer => offer.supplier_id === supplierFilter)) || ![item.name,item.shared_name].some(name => searchKey(name || '').includes(query)))) return '';
@@ -1292,7 +1300,58 @@ function catalogRows() {
       (isArticle ? '<button type="button" data-article-sheet="'+escape(item.id)+'">Fitxa</button>' :
         '<button type="button" class="icon-button" data-catalog-edit="'+escape(item.id)+'" title="Edita" aria-haspopup="dialog" aria-label="Edita '+escape(item.name)+'">'+pencilIcon+'</button>')+articleActions+select+'</div></div>'+
       (isArticle && addingArticle === item.id ? catalogLine(item,linked) : '')+'</div>';
-  }).join('') || empty('Cap '+names[section]+' per mostrar.');
+  };
+  const rows = data[section].filter(item => item.id !== pendingUnit).map(item => [item,rowHtml(item)]).filter(([,html]) => html);
+  if (!rows.length) return empty('Cap '+names[section]+' per mostrar.');
+  if (!isArticle) return rows.map(([,html]) => html).join('');
+  // Amb una cerca o un filtre de categoria, els grups es mostren oberts.
+  const forceOpen = Boolean(articleSearch.trim() || categoryFilter);
+  const groups = Map.groupBy(rows,([item]) => item.category_id || '');
+  return [...groups].sort(([a],[b]) => categoryName(a).localeCompare(categoryName(b),'ca')).map(([category,items]) =>
+    categoryGroup('articles',category,items.length+(items.length === 1 ? ' article' : ' articles'),items.map(([,html]) => html).join(''),forceOpen)).join('');
+}
+
+// Grups per categoria que es poden replegar. L'estat (replegat o no) es recorda en aquest navegador.
+const collapsedGroups = {order:new Set(), articles:new Set()};
+try {
+  const saved = JSON.parse(localStorage.getItem('gesto-catalog-collapsed') || '{}');
+  for (const scope of Object.keys(collapsedGroups)) (saved[scope] || []).forEach(id => collapsedGroups[scope].add(id));
+} catch { /* sense memòria al navegador: tots oberts */ }
+
+function saveCollapsedGroups() {
+  try {
+    localStorage.setItem('gesto-catalog-collapsed',JSON.stringify(Object.fromEntries(Object.entries(collapsedGroups).map(([scope,set]) => [scope,[...set]]))));
+  } catch { /* no passa res si no es pot desar */ }
+}
+
+function categoryGroup(scope, category, count, body, forceOpen = false) {
+  const open = forceOpen || !collapsedGroups[scope].has(category);
+  return '<details class="order-category" data-group-scope="'+scope+'" data-group-category="'+escape(category)+'"'+(forceOpen ? ' data-forced' : '')+(open ? ' open' : '')+'>'+
+    '<summary><span class="group-name">'+escape(categoryName(category))+'</span><span class="meta">'+escape(count)+'</span></summary>'+body+'</details>';
+}
+
+function groupToggleButton(scope) {
+  return '<button type="button" class="group-toggle" data-toggle-groups="'+scope+'">'+(collapsedGroups[scope].size ? 'Desplega-ho tot' : 'Replega-ho tot')+'</button>';
+}
+
+document.addEventListener('toggle',event => {
+  const group = event.target;
+  if (!(group instanceof HTMLDetailsElement) || !group.dataset.groupScope) return;
+  // Oberts a la força per una cerca o un filtre: no es recorda.
+  if (Object.hasOwn(group.dataset,'forced')) return;
+  const set = collapsedGroups[group.dataset.groupScope];
+  if (group.open) set.delete(group.dataset.groupCategory);
+  else set.add(group.dataset.groupCategory);
+  saveCollapsedGroups();
+  const button = document.querySelector('[data-toggle-groups="'+group.dataset.groupScope+'"]');
+  if (button) button.textContent = set.size ? 'Desplega-ho tot' : 'Replega-ho tot';
+},true);
+
+function refreshGroups(scope) {
+  if (scope === 'order') document.querySelector('#order-groups').innerHTML = orderGroups(data.draft.lines);
+  else refreshCatalogRows();
+  const button = document.querySelector('[data-toggle-groups="'+scope+'"]');
+  if (button) button.textContent = collapsedGroups[scope].size ? 'Desplega-ho tot' : 'Replega-ho tot';
 }
 
 function catalogLine(article, offers) {
@@ -1344,7 +1403,7 @@ function order() {
     '<label>Proveïdor<select id="order-supplier-filter">'+
     options(data.suppliers,orderSupplier,'Tots')+'</select></label>'+
     '<button type="button" id="order-visibility" aria-pressed="'+onlyOrdered+'"><span aria-hidden="true">👁︎</span> Només la comanda</button></div></div>'+
-    lookup+'<div id="order-groups">'+orderGroups(draft)+'</div>'+
+    lookup+'<div class="group-tools">'+groupToggleButton('order')+'</div><div id="order-groups">'+orderGroups(draft)+'</div>'+
     (draft.length ? '<div class="actions order-send"><button class="primary" id="generate">Desa i genera els missatges</button></div>' : '')+
     '</article>';
 }
@@ -1357,12 +1416,14 @@ function orderGroups(draft) {
       !orderSupplier || supplierArticles.has(article.id) || byArticle.has(article.id)));
   const groups = Map.groupBy(articles,article => article.category_id || '');
   const sorted = [...groups].sort(([a],[b]) => categoryName(a).localeCompare(categoryName(b),'ca'));
-  return sorted.map(([category,items]) =>
-    '<section class="order-category"><h3>'+escape(categoryName(category))+'</h3>'+
-    items.map(article => {
-      const lines = byArticle.get(article.id);
-      return lines ? lines.map(line => orderListRow(article,line,draft.indexOf(line))).join('') : orderListRow(article);
-    }).join('')+'</section>').join('') || empty(orderCategory || orderSupplier ? 'No hi ha articles que coincideixin amb els filtres.' :
+  return sorted.map(([category,items]) => {
+    const ordered = items.filter(article => byArticle.has(article.id)).length;
+    return categoryGroup('order',category,items.length+(items.length === 1 ? ' article' : ' articles')+(ordered ? ' · ✓ '+ordered : ''),
+      items.map(article => {
+        const lines = byArticle.get(article.id);
+        return lines ? lines.map(line => orderListRow(article,line,draft.indexOf(line))).join('') : orderListRow(article);
+      }).join(''),Boolean(orderCategory));
+  }).join('') || empty(orderCategory || orderSupplier ? 'No hi ha articles que coincideixin amb els filtres.' :
       onlyOrdered ? 'Encara no hi ha cap article a la comanda.' :
       !request && !data.articles.length ? 'El catàleg de prova és buit. Escriu un nom a «Afegeix un article» per crear-ne un.' :
       'El catàleg és buit.');
@@ -1497,6 +1558,8 @@ function focusOrderArticle(id) {
   const pencil = [...document.querySelectorAll('#order-groups [data-order-editor]')].find(item => item.dataset.orderEditor === id);
   const row = pencil?.closest('.order-list-row');
   if (!row) return;
+  const group = row.closest('details');
+  if (group && !group.open) group.open = true;
   row.scrollIntoView({block:'center',behavior:'smooth'});
   row.querySelector('.order-toggle')?.focus({preventScroll:true});
   row.classList.add('just-added');
@@ -1946,8 +2009,16 @@ document.addEventListener('click',async event => {
     addingArticle = '';
     render();
     document.querySelector('#article-archive-view').focus();
+  } else if (target.toggleGroups) {
+    const scope = target.toggleGroups;
+    const set = collapsedGroups[scope];
+    if (set.size) set.clear();
+    else document.querySelectorAll('details[data-group-scope="'+scope+'"]').forEach(group => set.add(group.dataset.groupCategory));
+    saveCollapsedGroups();
+    refreshGroups(scope);
   } else if (button.id === 'select-visible-articles') {
-    content.querySelectorAll('[data-merge-article]').forEach(input => mergeSelection.add(input.dataset.mergeArticle));
+    // Només els que es veuen: no compten els de categories replegades.
+    [...content.querySelectorAll('[data-merge-article]')].filter(input => !input.closest('details:not([open])')).forEach(input => mergeSelection.add(input.dataset.mergeArticle));
     render();
   } else if (button.id === 'clear-article-merge') {
     mergeSelection.clear();
