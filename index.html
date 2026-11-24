@@ -5,8 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="referrer" content="no-referrer">
 <title>GestoCatalog</title>
-<link rel="icon" type="image/png" href="./icon.png?v=1.25.3">
-<link rel="apple-touch-icon" sizes="180x180" href="./icon.png?v=1.25.3">
+<link rel="icon" type="image/png" href="./icon.png?v=1.26.0">
+<link rel="apple-touch-icon" sizes="180x180" href="./icon.png?v=1.26.0">
 <style>:root{color-scheme:light;--bg:#f7f8fd;--tx:#28377e;--mu:#566598;--ln:#303f91;--surface:#fff;--soft:#f0f2fc;--border:#d4daf1;--field:#b6bfdf;--on:#fff;--red:#b42318;--green:#17734a}
 :root[data-theme=dark]{color-scheme:dark;--bg:#10152c;--tx:#e5e9ff;--mu:#adb8e5;--ln:#a1afff;--surface:#1b2447;--soft:#232f59;--border:#425080;--field:#6371a0;--on:#10152c;--red:#ff9992;--green:#84dbab}
 *{box-sizing:border-box}
@@ -289,7 +289,7 @@ details.order-category[open]>summary{border-radius:11px 11px 0 0}
 <body>
 <main>
 <header class="topbar">
-  <div class="brand"><h1>GestoCatalog</h1><div class="meta version">Versió 1.25.3<span id="sync-state" role="status"></span></div></div>
+  <div class="brand"><h1>GestoCatalog</h1><div class="meta version">Versió 1.26.0<span id="sync-state" role="status"></span></div></div>
   <div class="top-actions">
     <div class="menu-anchor">
       <button id="menu-toggle" type="button" aria-label="Menú" aria-expanded="false" aria-controls="menu-panel" hidden><span aria-hidden="true">☰</span><span class="top-action-label" aria-hidden="true">Menú</span></button>
@@ -1015,6 +1015,7 @@ function catalogFields(current) {
     (section === 'units' ? '<label>Nom en singular<input name="singular" maxlength="120" placeholder="'+escape(current ? guessSingular(current.name) : 'p. ex. caixa')+'" value="'+escape(current?.singular)+'"></label>' : '')+
     (isSupplier ? '<label>WhatsApp amb prefix internacional<input name="phone" type="tel" placeholder="+34 600 000 000" value="'+(current?.phone ? '+'+escape(current.phone) : '')+'"></label>' : '')+
     (isSupplier ? '<label>Nom del comercial<input name="contact" maxlength="120" value="'+escape(current?.contact)+'"></label>' : '')+
+    (isSupplier ? '<label>Correu electrònic<input name="email" type="email" maxlength="254" autocapitalize="off" value="'+escape(current?.email)+'"></label>' : '')+
     '</div>'+
     (section === 'units' ? '<p class="meta">El singular es fa servir al missatge del proveïdor quan en demanes 1. Si el deixes buit, es dedueix del nom.</p>' : '')+
     (isSupplier ? contactControls()+'<label>Missatge de WhatsApp<textarea name="messageTemplate" maxlength="1000" rows="4" placeholder="Bon dia, {comercial}! Us voldríem fer aquesta comanda:">'+escape(current?.message_template)+'</textarea></label>'+
@@ -1741,22 +1742,49 @@ function contactControls() {
   return '<div class="contact-actions actions">'+
     (typeof navigator.contacts?.select === 'function' ? '<button type="button" data-pick-contact>Tria de l’agenda</button>' : '')+
     (isMobileContactDevice() ? '' : '<label class="button contact-file">Importa una targeta de contacte<input type="file" data-contact-file accept=".vcf,text/vcard,text/x-vcard"></label>')+
-    '<label data-contact-choice hidden>Telèfon del contacte<select></select></label></div>';
+    '<label data-contact-choice hidden>Telèfon del contacte<select></select></label>'+
+    '<label data-contact-email-choice hidden>Correu del contacte<select></select></label></div>'+appleContactShortcut();
+}
+
+// iPhone sense el selector de contactes de Safari: drecera Nexa Contacte 2, com a GestoAdmin i GestoTips
+// (shared/workers-ui.js). Les instruccions d'instal·lació s'amaguen un cop la drecera ha funcionat.
+function appleContactShortcut() {
+  const ios = /iPhone|iPad|iPod/i.test(navigator.userAgent) ||
+    (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  if (!ios || typeof navigator.contacts?.select === 'function') return '';
+  return '<details class="item" data-contact-ios><summary>Tria de l’agenda de l’iPhone</summary>'+
+    '<p class="meta">Prem «Tria el contacte», tria la persona i torna a aquesta fitxa per enganxar-lo.</p>'+
+    '<a class="button" href="shortcuts://run-shortcut?name=Nexa%20Contacte%202">Tria el contacte</a>'+
+    '<label>Enganxa el contacte<textarea rows="3" data-contact-paste spellcheck="false" autocapitalize="off"></textarea></label>'+
+    '<button type="button" data-contact-apply>Carrega el contacte</button>'+
+    (workerShortcutReady()
+      ? '<p class="meta"><a href="https://jninforner.github.io/NexaTips/Nexa%20Contacte%202.shortcut">Reinstal·la la drecera</a></p></details>'
+      : renderShortcutInstall());
 }
 
 function fillContact(form, contact) {
   const phones = [...new Set((contact.tel || []).map(whatsappPhone).filter(Boolean))];
-  if (!phones.length) {
+  // El correu només hi és a la fitxa del proveïdor (no a la finestra de WhatsApp de la comanda).
+  const emailField = form.elements.email;
+  const emails = emailField ? [...new Set((contact.email || []).map(value => value.trim()).filter(value => value && value.length <= 254))] : [];
+  if (!phones.length && !emails.length) {
     notify('El contacte no té cap telèfon vàlid. Escriu el número amb el prefix internacional.',true);
-    return;
+    return false;
   }
   if (contact.name) form.elements.contact.value = contact.name.slice(0,120);
   const choice = form.querySelector('[data-contact-choice]');
   choice.hidden = phones.length < 2;
   choice.querySelector('select').innerHTML = options(phones.map(phone => ({id:phone,name:'+'+phone})),'','Tria un telèfon');
-  form.elements.phone.value = phones.length === 1 ? '+'+phones[0] : '';
+  if (phones.length) form.elements.phone.value = phones.length === 1 ? '+'+phones[0] : '';
+  const emailChoice = form.querySelector('[data-contact-email-choice]');
+  emailChoice.hidden = emails.length < 2;
+  emailChoice.querySelector('select').innerHTML = options(emails.map(email => ({id:email,name:email})),'','Tria un correu');
+  if (emails.length) emailField.value = emails.length === 1 ? emails[0] : '';
   if (phones.length > 1) choice.querySelector('select').focus();
-  notify(phones.length > 1 ? 'Tria quin número de l’agenda vols fer servir.' : '');
+  else if (emails.length > 1) emailChoice.querySelector('select').focus();
+  notify(!phones.length ? 'El contacte no té cap telèfon vàlid. Escriu el WhatsApp amb el prefix internacional.' :
+    phones.length > 1 || emails.length > 1 ? 'Tria quin número o correu de l’agenda vols fer servir.' : '',!phones.length);
+  return true;
 }
 
 function whatsappLink(phone, message) {
@@ -2143,10 +2171,25 @@ document.addEventListener('click',async event => {
     render();
     document.querySelector('#catalog input').focus();
     document.querySelector('#catalog').scrollIntoView({block:'nearest'});
+  } else if (Object.hasOwn(target,'contactApply')) {
+    const form = button.form;
+    const input = form.querySelector('[data-contact-paste]');
+    const fromShortcut = workerContactFromShortcut(input.value);
+    const contact = fromShortcut ?? vCardContact(input.value.trim());
+    if (!contact || !(contact.name || contact.tel?.length)) {
+      notify('Enganxa el contacte copiat per la drecera Nexa Contacte 2.',true);
+      return;
+    }
+    if (fromShortcut) markWorkerShortcutReady();
+    if (fillContact(form,contact)) {
+      input.value = '';
+      form.querySelector('[data-contact-ios]').open = false;
+    }
   } else if (Object.hasOwn(target,'pickContact')) {
     try {
-      const [contact] = await navigator.contacts.select(['name','tel'],{multiple:false});
-      if (contact && button.form.isConnected) fillContact(button.form,{name:contact.name?.[0],tel:contact.tel});
+      const wantsEmail = Boolean(button.form.elements.email);
+      const [contact] = await navigator.contacts.select(wantsEmail ? ['name','tel','email'] : ['name','tel'],{multiple:false});
+      if (contact && button.form.isConnected) fillContact(button.form,{name:contact.name?.[0],tel:contact.tel,email:contact.email});
     } catch (error) {
       if (error.name !== 'AbortError') notify('No s’ha pogut obrir l’agenda. Pots escriure el número al formulari.',true);
     }
@@ -2271,6 +2314,10 @@ document.addEventListener('change', async event => {
   }
   if (event.target.matches('[data-contact-choice] select')) {
     event.target.form.elements.phone.value = event.target.value ? '+'+event.target.value : '';
+    return;
+  }
+  if (event.target.matches('[data-contact-email-choice] select')) {
+    event.target.form.elements.email.value = event.target.value;
     return;
   }
   if (Object.hasOwn(event.target.dataset,'contactFile')) {
