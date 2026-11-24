@@ -5,8 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="referrer" content="no-referrer">
 <title>GestoCatalog</title>
-<link rel="icon" type="image/png" href="./icon.png?v=1.25.0">
-<link rel="apple-touch-icon" sizes="180x180" href="./icon.png?v=1.25.0">
+<link rel="icon" type="image/png" href="./icon.png?v=1.25.1">
+<link rel="apple-touch-icon" sizes="180x180" href="./icon.png?v=1.25.1">
 <style>:root{color-scheme:light;--bg:#f7f8fd;--tx:#28377e;--mu:#566598;--ln:#303f91;--surface:#fff;--soft:#f0f2fc;--border:#d4daf1;--field:#b6bfdf;--on:#fff;--red:#b42318;--green:#17734a}
 :root[data-theme=dark]{color-scheme:dark;--bg:#10152c;--tx:#e5e9ff;--mu:#adb8e5;--ln:#a1afff;--surface:#1b2447;--soft:#232f59;--border:#425080;--field:#6371a0;--on:#10152c;--red:#ff9992;--green:#84dbab}
 *{box-sizing:border-box}
@@ -119,8 +119,8 @@ img,video,canvas{max-width:100%;height:auto}
 
 .order-list-heading{display:flex;align-items:start;justify-content:space-between;gap:10px;flex-wrap:wrap}
 .order-list-heading h2{margin:0}
-#order-visibility{gap:6px;padding-inline:10px}
-#order-visibility[aria-pressed=true]{background:var(--ln);color:var(--on)}
+.list-mode{gap:6px;padding-inline:10px;white-space:nowrap}
+.list-mode[aria-pressed=true]{background:var(--ln);color:var(--on)}
 .order-send{margin-top:12px}
 .order-category{margin-top:16px;border:1px solid var(--border);border-radius:12px;background:var(--surface)}
 .order-category h3{margin:0;padding:7px 11px;background:var(--soft);border-radius:11px 11px 0 0;font-size:15px}
@@ -170,7 +170,9 @@ img,video,canvas{max-width:100%;height:auto}
   .order-list-filters{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:4px 8px}
   .order-list-filters label{width:100%;gap:2px;font-size:12px}
   .order-list-filters select{height:40px;min-height:40px;padding:4px 6px;text-overflow:ellipsis}
-  #order-visibility{grid-column:1/-1;justify-self:start;min-height:40px;padding-block:4px;font-size:14px}
+  .list-mode{grid-column:1/-1;justify-self:start;min-height:40px;padding-block:4px;font-size:14px}
+  .list-tools{gap:6px}
+  .list-tools button{min-height:40px;padding-block:4px;font-size:14px}
   .order-lines .order-lookup{margin-top:6px}
   .article-lookup{gap:6px}
   .article-lookup label{gap:2px;font-size:12px}
@@ -236,11 +238,15 @@ details.order-category[open]>summary::before{transform:rotate(90deg)}
 details.order-category>summary .group-name{flex:1 1 auto}
 details.order-category>summary .meta{font-weight:400;font-size:13px}
 details.order-category[open]>summary{border-radius:11px 11px 0 0}
-.group-tools{display:flex;justify-content:flex-end;margin-top:10px}
+/* Eines comunes de la llista: accions a l'esquerra, «Replega-ho tot» a la dreta */
+.list-tools{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-top:10px}
+.list-tools .group-toggle{margin-left:auto}
+.list-extra{margin-top:16px}
+.list-extra .card{margin:0}
 /* Files de la pantalla Articles (mateixa fila que Nova comanda, per marcar) */
-.order-list-row.is-select strong{color:var(--tx)}
 .order-list-row.is-selected{background:var(--soft)}
 .is-selected .order-marker{background:var(--ln);color:var(--on);border-color:var(--ln)}
+.order-list-row.is-selected strong{color:var(--green)}
 .order-list-row.is-select{grid-template-columns:minmax(0,1fr) 44px}
 
 .worker-profiles .worker-profile-item{border-top:1px solid var(--border);padding:10px 0}
@@ -276,7 +282,7 @@ details.order-category[open]>summary{border-radius:11px 11px 0 0}
 <body>
 <main>
 <header class="topbar">
-  <div class="brand"><h1>GestoCatalog</h1><div class="meta version">Versió 1.25.0<span id="sync-state" role="status"></span></div></div>
+  <div class="brand"><h1>GestoCatalog</h1><div class="meta version">Versió 1.25.1<span id="sync-state" role="status"></span></div></div>
   <div class="top-actions">
     <div class="menu-anchor">
       <button id="menu-toggle" type="button" aria-label="Menú" aria-expanded="false" aria-controls="menu-panel" hidden><span aria-hidden="true">☰</span><span class="top-action-label" aria-hidden="true">Menú</span></button>
@@ -1035,19 +1041,36 @@ function openCatalogEditor(item) {
 }
 
 function catalog() {
-  const current = null;
-  const isSupplier = section === 'suppliers';
-  const title = {suppliers:'Nou proveïdor',articles:'Nou article',units:'Nova unitat',categories:'Nova categoria'}[section];
-  const isArticle = section === 'articles';
-  const filters = isArticle ? '<div id="article-filters" class="grid">'+listFilters('articles')+'</div>'+listLookup('articles') : '';
-  return (isArticle ? '' : '<article class="card"><details class="catalog-new"><summary>'+escape(title)+'</summary><form id="catalog">'+catalogFields(current)+
-    '<div class="actions"><button class="primary">Desa</button></div></form></details></article>')+
-    (isArticle ? pdfImportCard() : '')+
-    '<article class="card"><h2>'+{suppliers:'Proveïdors registrats',articles:'Articles registrats',units:'Unitats registrades',categories:'Categories registrades'}[section]+'</h2>'+filters+(isArticle ?
-      '<div class="actions catalog-management"><button type="button" class="primary" data-new-article>+ Nou article</button><button type="button" id="article-archive-view" aria-pressed="'+archivedArticles+'">'+(archivedArticles ? 'Mostra els articles actius' : 'Mostra els arxivats')+'</button>'+
-      '<button type="button" id="select-visible-articles">Marca tots els que es veuen</button>'+groupToggleButton('articles')+'</div>'+
-      '<div id="article-merge-controls">'+articleMergeControls()+'</div><div id="list-articles">'+articleList('articles')+'</div>' :
-      '<div id="catalog-rows">'+catalogRows()+'</div>')+'</article>';
+  const title = {suppliers:'Nou proveïdor',units:'Nova unitat',categories:'Nova categoria'}[section];
+  return '<article class="card"><details class="catalog-new"><summary>'+escape(title)+'</summary><form id="catalog">'+catalogFields(null)+
+    '<div class="actions"><button class="primary">Desa</button></div></form></details></article>'+
+    '<article class="card"><h2>'+{suppliers:'Proveïdors registrats',units:'Unitats registrades',categories:'Categories registrades'}[section]+'</h2>'+
+    '<div id="catalog-rows">'+catalogRows()+'</div></article>';
+}
+
+// Pantalla Articles: mateixa estructura que Nova comanda (capçalera amb filtres, cerca, eines i llista).
+function articlesView() {
+  const active = data.articles.filter(article => !article.archived).length;
+  const archived = data.articles.length - active;
+  return '<article class="card order-lines">'+listHeading('Articles',
+      archivedArticles ? archived+(archived === 1 ? ' article arxivat' : ' articles arxivats') : active+(active === 1 ? ' article actiu' : ' articles actius')+(archived ? ' · '+archived+' arxivats' : ''),
+      'articles','<button type="button" id="article-archive-view" class="list-mode" aria-pressed="'+archivedArticles+'"><span aria-hidden="true">🗄︎</span> Només els arxivats</button>')+
+    listLookup('articles')+
+    listTools('articles','<button type="button" class="primary" data-new-article>+ Nou article</button><button type="button" id="select-visible-articles">Marca tots els que es veuen</button>')+
+    '<div id="article-merge-controls">'+articleMergeControls()+'</div>'+
+    '<div id="list-articles">'+articleList('articles')+'</div>'+
+    '<div class="list-extra">'+pdfImportCard()+'</div></article>';
+}
+
+// Capçalera comuna: títol, comptador i filtres (amb el botó propi de cada pantalla al costat).
+function listHeading(title, meta, mode, modeButton) {
+  return '<div class="order-list-heading"><div><h2>'+escape(title)+'</h2><div class="meta">'+escape(meta)+'</div></div>'+
+    '<div class="order-list-filters">'+listFilters(mode)+modeButton+'</div></div>';
+}
+
+// Fila d'eines comuna: accions de la pantalla a l'esquerra i «Replega-ho tot» a la dreta.
+function listTools(mode, actions = '') {
+  return '<div class="list-tools">'+actions+groupToggleButton(mode)+'</div>';
 }
 
 function pdfImportCard() {
@@ -1421,13 +1444,19 @@ function articleList(mode) {
   return empty(!request && !data.articles.length ? 'El catàleg de prova és buit. Escriu un nom a «Cerca o crea un article» per crear-ne un.' : 'El catàleg és buit.');
 }
 
+// Detall d'una fila sense marcar (igual a les dues pantalles): proveïdors · unitat de compra.
+function articleDetail(article, onlySupplier = '') {
+  const suppliers = data.offers.filter(offer => offer.article_id === article.id && (!onlySupplier || offer.supplier_id === onlySupplier))
+    .map(offer => byId('suppliers',offer.supplier_id)?.name).filter(Boolean);
+  return [suppliers.join(' · ') || 'Sense proveïdor',byId('units',article.unit_id)?.name].filter(Boolean).join(' · ');
+}
+
 // Fila de la pantalla Articles: igual que la de Nova comanda, però prémer-la la marca (casella) i el llapis obre la fitxa.
 function selectListRow(article) {
   const name = escape(article.name);
   const id = escape(article.id);
   const selected = mergeSelection.has(article.id);
-  const suppliers = data.offers.filter(offer => offer.article_id === article.id).map(offer => byId('suppliers',offer.supplier_id)?.name).filter(Boolean);
-  const detail = [byId('units',article.unit_id)?.name,suppliers.join(' · ') || 'Sense proveïdor'].filter(Boolean).join(' · ');
+  const detail = articleDetail(article,supplierFilter);
   return '<div class="order-list-row is-select'+(selected ? ' is-selected' : '')+'">'+
     '<button type="button" class="order-toggle" data-select-article="'+id+'" aria-pressed="'+selected+'" title="'+escape(article.name+' · '+detail)+'">'+
     '<span class="order-marker" aria-hidden="true">'+(selected ? '✓' : '')+'</span><span class="order-item-copy">'+
@@ -1452,11 +1481,9 @@ function matchesArticleName(article, query, exact = false) {
 
 function order() {
   const draft = data.draft.lines;
-  return '<article class="card order-lines"><div class="order-list-heading"><div><h2>Nova comanda</h2>'+
-    '<div class="meta">'+draftArticleIds().size+' de '+data.articles.length+' articles a la comanda</div></div>'+
-    '<div class="order-list-filters">'+listFilters('order')+
-    '<button type="button" id="order-visibility" aria-pressed="'+onlyOrdered+'"><span aria-hidden="true">👁︎</span> Només la comanda</button></div></div>'+
-    listLookup('order')+'<div class="group-tools">'+groupToggleButton('order')+'</div><div id="list-order">'+articleList('order')+'</div>'+
+  return '<article class="card order-lines">'+listHeading('Nova comanda',draftArticleIds().size+' de '+data.articles.filter(article => !article.archived).length+' articles a la comanda','order',
+    '<button type="button" id="order-visibility" class="list-mode" aria-pressed="'+onlyOrdered+'"><span aria-hidden="true">👁︎</span> Només la comanda</button>')+
+    listLookup('order')+listTools('order')+'<div id="list-order">'+articleList('order')+'</div>'+
     (draft.length ? '<div class="actions order-send"><button class="primary" id="generate">Desa i genera els missatges</button></div>' : '')+
     '</article>';
 }
@@ -1477,7 +1504,7 @@ function orderListRow(article,line,index) {
   const supplier = line ? byId('suppliers',line.supplier)?.name : suppliers.filter(item => !orderSupplier || item.id === orderSupplier).map(item => item.name).join(' · ');
   const detail = line
     ? quantityFormat.format(line.quantity)+' × '+(byId('units',line.unit)?.name || '')+' · '+(supplier || '')
-    : supplier || 'Sense proveïdor';
+    : articleDetail(article,orderSupplier);
   const toggle = line ? 'data-remove="'+index+'"' : 'data-mark-article="'+id+'"';
   const pencil = '<span aria-hidden="true">✎</span>';
   return '<div class="order-list-row'+(line ? ' is-ordered' : '')+'">'+
@@ -1985,7 +2012,7 @@ function render() {
   if (!allowed.includes(section)) section = allowed[0];
   tabs.innerHTML = Object.entries(sections).filter(([key]) => allowed.includes(key)).map(([key,label]) => '<button data-tab="'+key+'" '+(section === key ? 'aria-current="page"' : '')+'>'+label+'</button>').join('');
   if (invoiceReview && section === 'purchases') syncInvoiceReview(document.querySelector('#purchase-review'));
-  content.innerHTML = section === 'order' ? order() : section === 'history' ? history() : section === 'purchases' ? purchasesView() :
+  content.innerHTML = section === 'order' ? order() : section === 'articles' ? articlesView() : section === 'history' ? history() : section === 'purchases' ? purchasesView() :
     '<section class="card main-card"><h2>'+sections[section]+'</h2>'+catalog()+'</section>';
   refreshArticleSheet();
 }
