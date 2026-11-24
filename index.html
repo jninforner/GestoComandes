@@ -5,8 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="referrer" content="no-referrer">
 <title>GestoCatalog</title>
-<link rel="icon" type="image/png" href="./icon.png?v=1.29.1">
-<link rel="apple-touch-icon" sizes="180x180" href="./icon.png?v=1.29.1">
+<link rel="icon" type="image/png" href="./icon.png?v=1.30.0">
+<link rel="apple-touch-icon" sizes="180x180" href="./icon.png?v=1.30.0">
 <style>:root{color-scheme:light;--bg:#f7f8fd;--tx:#28377e;--mu:#566598;--ln:#303f91;--surface:#fff;--soft:#f0f2fc;--border:#d4daf1;--field:#b6bfdf;--on:#fff;--red:#b42318;--green:#17734a}
 :root[data-theme=dark]{color-scheme:dark;--bg:#10152c;--tx:#e5e9ff;--mu:#adb8e5;--ln:#a1afff;--surface:#1b2447;--soft:#232f59;--border:#425080;--field:#6371a0;--on:#10152c;--red:#ff9992;--green:#84dbab}
 *{box-sizing:border-box}
@@ -266,6 +266,14 @@ details.order-category[open]>summary{border-radius:11px 11px 0 0}
 .order-entry>.actions{margin-top:8px}
 .sheet-name{display:block;margin-bottom:12px}
 .sheet-pair{grid-template-columns:repeat(2,minmax(0,1fr))}
+.purchase-price{margin-bottom:4px}
+.purchase-price:empty{display:none}
+.purchase-price>.meta{align-self:end;margin:0 0 10px}
+.price-stats{display:grid;gap:8px;margin:0 0 8px}
+.price-stats>div{display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;border-top:1px solid var(--border);padding-top:6px}
+.price-stats>div:first-child{border-top:0;padding-top:0}
+.price-stats dt{color:var(--mu)}
+.price-stats dd{margin:0;display:grid;justify-items:end;text-align:end}
 
 .worker-profiles .worker-profile-item{border-top:1px solid var(--border);padding:10px 0}
 .worker-profile-item>summary,.worker-profile-inactive>summary{cursor:pointer;min-height:34px;display:flex;align-items:center;justify-content:space-between;gap:12px}
@@ -300,7 +308,7 @@ details.order-category[open]>summary{border-radius:11px 11px 0 0}
 <body>
 <main>
 <header class="topbar">
-  <div class="brand"><h1>GestoCatalog</h1><div class="meta version">Versió 1.29.1<span id="sync-state" role="status"></span></div></div>
+  <div class="brand"><h1>GestoCatalog</h1><div class="meta version">Versió 1.30.0<span id="sync-state" role="status"></span></div></div>
   <div class="top-actions">
     <div class="menu-anchor">
       <button id="menu-toggle" type="button" aria-label="Menú" aria-expanded="false" aria-controls="menu-panel" hidden><span aria-hidden="true">☰</span><span class="top-action-label" aria-hidden="true">Menú</span></button>
@@ -1629,7 +1637,10 @@ function articleSheet(article, index) {
       '<div class="grid sheet-pair">'+
       '<label>Categoria<select name="category">'+options(data.categories,article.category_id,'Sense categoria')+'</select></label>'+
       '<label>Unitat<select name="unit" required>'+options(purchaseUnits(),line?.unit || article.unit_id,'Tria una unitat')+'</select></label></div>'+
+      '<label class="sheet-name">Unitat de preu<select name="priceUnit">'+options(purchaseUnits(),article.price_unit_id || '','La mateixa que la de compra')+'</select></label>'+
+      '<p class="meta">Per comparar preus. Ex.: el vi es compra a caixes però el preu que compta és per ampolla.</p>'+
       '</form></section>'+
+    '<section class="sheet-part"><h3>Preus</h3>'+articlePrices(article)+'</section>'+
     '<section class="sheet-part"><h3>Proveïdors</h3>'+
       offers.map(offer => '<div class="row item"><span>'+escape(byId('suppliers',offer.supplier_id)?.name)+'</span>'+
         '<button type="button" class="remove" data-unlink="'+escape(offer.supplier_id)+'">Desvincula</button></div>').join('')+
@@ -2002,6 +2013,7 @@ function invoiceReviewForm() {
       '<label>Unitat<input name="unit-'+i+'" maxlength="20" value="'+escape(row.unit)+'"'+(row.discard ? ' disabled' : '')+'></label>'+
       '<label>Preu unitari (€)<input name="price-'+i+'" type="number" step="any" inputmode="decimal" value="'+escape(row.unitPrice ?? '')+'"'+(row.discard ? ' disabled' : '')+'></label>'+
       '<label>Import (€)<input name="total-'+i+'" type="number" step="any" inputmode="decimal" value="'+escape(row.total ?? '')+'"'+(row.discard ? ' disabled' : '')+'></label></div>'+
+      '<div class="purchase-price grid" data-price-row="'+i+'">'+priceRow(row,i)+'</div>'+
       '<div class="purchase-row-actions"><p class="meta" data-article-hint="'+i+'">'+articleHint(row)+'</p>'+
       '<label class="purchase-check"><input type="checkbox" name="stock-'+i+'"'+(row.toStock ? ' checked' : '')+(row.discard ? ' disabled' : '')+'> Envia a GestoStock</label>'+
       '<button type="button" data-discard-row="'+i+'">'+(row.discard ? 'Recupera la línia' : 'Descarta')+'</button></div></fieldset>';
@@ -2041,6 +2053,8 @@ function syncInvoiceReview(form) {
     row.unitPrice = number('price-'+i);
     row.total = number('total-'+i);
     row.toStock = field('stock-'+i).checked;
+    // «Ampolles per caixa» només hi és si la unitat de l'albarà no és la de preu.
+    if (field('pack-'+i)) row.perPack = number('pack-'+i);
   });
 }
 
@@ -2104,7 +2118,8 @@ async function savePurchaseReview(form, button) {
   const payload = {action:'savePurchase', supplierId:review.supplierId, supplierName:review.supplierId ? '' : review.supplierName,
     date:review.date, invoiceNumber:review.invoiceNumber.trim(), force:duplicateAllowed,
     lines:kept.map(row => ({articleId:row.articleId, newArticle:row.newName, name:row.name, quantity:row.quantity, unit:row.unit,
-      unitPrice:row.unitPrice, total:row.total, kg:row.kg, units:row.units, toStock:row.toStock}))};
+      unitPrice:row.unitPrice, total:row.total, kg:row.kg, units:row.units, toStock:row.toStock,
+      priceQuantity:row.articleId ? rowPriceQuantity(row) : row.quantity}))};
   try {
     await api(payload);
   } catch (error) {
@@ -2119,6 +2134,90 @@ async function savePurchaseReview(form, button) {
   notify('Albarà desat.'+(sent ? ' '+sent+(sent === 1 ? ' línia enviada' : ' línies enviades')+' a GestoStock.' : ''));
 }
 
+// ---- Preus per unitat de preu ----
+// Unitat en què es compara el preu (ex.: ampolla). Buida a la fitxa = la unitat de compra.
+function priceUnitOf(article) {
+  return byId('units',article?.price_unit_id || article?.unit_id);
+}
+// El text d'una unitat de l'albarà correspon a una unitat del catàleg? (caixes/caixa, kg/kilos, u/uds/unitats…)
+const unitAliases = {kg:['kg','kgs','kilo','kilos','quilo','quilos','kilogram','kilograms'],unit:['u','ud','uds','un','unitat','unitats','unidad','unidades','pc','pcs','peca','peces']};
+function unitMatches(text, unit) {
+  const key = searchKey(String(text ?? '')).replace(/\.$/,'');
+  if (!key || !unit) return false;
+  const names = [unit.name, unit.singular, guessSingular(unit.name)].filter(Boolean).map(searchKey);
+  return names.includes(key) || (unitAliases[unit.id] || []).includes(key) ||
+    Object.values(unitAliases).some(list => list.includes(key) && list.some(alias => names.includes(alias)));
+}
+const priceOf = line => line.total !== null && line.total !== undefined ? line.total :
+  line.unitPrice !== null && line.unitPrice !== undefined && line.quantity !== null ? line.unitPrice*line.quantity : null;
+// Quantes unitats de preu porta cada unitat de l'albarà (ex.: 6 ampolles per caixa). 1 si és la mateixa unitat.
+function samePriceUnit(row, unit) {
+  return unitMatches(row.unit,unit);
+}
+function defaultPerPack(row, unit) {
+  if (!row.quantity) return null;
+  if (unitMatches('kg',unit) && row.kg) return Number((row.kg/row.quantity).toPrecision(6));
+  if (row.units) return Number((row.units/row.quantity).toPrecision(6));
+  return null;
+}
+function rowPriceQuantity(row) {
+  const article = byId('articles',row.articleId);
+  const unit = priceUnitOf(article);
+  if (!article || !unit || !(row.quantity > 0)) return null;
+  if (samePriceUnit(row,unit)) return row.quantity;
+  const perPack = row.perPack ?? defaultPerPack(row,unit);
+  return perPack > 0 ? Number((perPack*row.quantity).toPrecision(12)) : null;
+}
+const unitShort = unit => unitLabel(unit.name,1);
+function priceRowText(row) {
+  const unit = priceUnitOf(byId('articles',row.articleId));
+  const quantity = rowPriceQuantity(row);
+  const total = priceOf(row);
+  if (!unit) return '';
+  return quantity && total !== null ? 'Preu per '+escape(unitShort(unit))+': <strong>'+moneyFormat.format(total/quantity)+'</strong>' :
+    'Sense preu per '+escape(unitShort(unit))+' (falta l’import o la quantitat).';
+}
+function priceRow(row, i) {
+  if (row.discard) return '';
+  const article = byId('articles',row.articleId);
+  if (!article) return row.newName ? '<p class="meta">Article nou: el preu es guardarà en la unitat de l’albarà.</p>' : '';
+  const unit = priceUnitOf(article);
+  if (!unit) return '<p class="meta">L’article no té unitat: no se’n podrà comparar el preu. Posa-li a la fitxa.</p>';
+  const field = samePriceUnit(row,unit) ? '' :
+    '<label>'+escape(unit.name.charAt(0).toLocaleUpperCase('ca')+unit.name.slice(1))+' per '+escape(guessSingular(row.unit || 'unitat'))+
+    '<input name="pack-'+i+'" type="number" min="0" step="any" inputmode="decimal" value="'+escape(row.perPack ?? defaultPerPack(row,unit) ?? '')+'" placeholder="Ex.: 6"></label>';
+  return field+'<p class="meta" data-price-text="'+i+'">'+priceRowText(row)+'</p>';
+}
+
+// Dades de preu d'un article (fitxa): últim preu, mitjanes ponderades, mínim i màxim i per proveïdor.
+function articlePrices(article) {
+  const unit = priceUnitOf(article);
+  if (!unit) return '<p class="meta">Tria la unitat de l’article per poder-ne guardar els preus.</p>';
+  const all = (data.priceLines || []).filter(line => line.article_id === article.id);
+  const lines = all.filter(line => line.unit_id === unit.id);
+  const other = all.length > lines.length ? '<p class="meta">Hi ha compres desades en una altra unitat de preu: no es compten.</p>' : '';
+  if (!lines.length) return '<p class="meta">Encara no hi ha preus per '+escape(unitShort(unit))+'. Sortiran en desar albarans.</p>'+other;
+  const per = ' €/'+unitShort(unit);
+  const price = value => moneyFormat.format(value).replace(/\s?€$/,'')+per;
+  const since = days => orderKeyFormat.format(new Date(Date.now()-days*864e5));
+  const average = items => items.reduce((sum,line) => sum+line.total,0)/items.reduce((sum,line) => sum+line.quantity,0);
+  const count = items => items.length+(items.length === 1 ? ' compra' : ' compres');
+  const last = lines[0];
+  const month = lines.filter(line => line.date >= since(30));
+  const year = lines.filter(line => line.date >= since(365));
+  const each = year.map(line => line.total/line.quantity);
+  const bySupplier = Map.groupBy(year,line => line.supplier_name || 'Sense proveïdor');
+  const rows = [
+    ['Últim preu', price(last.total/last.quantity), dayOf(last.date)+(last.supplier_name ? ' · '+last.supplier_name : '')],
+    ['Mitjana de l’últim mes', month.length ? price(average(month)) : '—', month.length ? count(month) : 'Cap compra'],
+    ['Mitjana de l’últim any', year.length ? price(average(year)) : '—', year.length ? count(year) : 'Cap compra'],
+    ...(year.length > 1 ? [['Mínim i màxim de l’any', price(Math.min(...each))+' – '+price(Math.max(...each)), '']] : [])
+  ];
+  return '<dl class="price-stats">'+rows.map(([label,value,note]) => '<div><dt>'+escape(label)+'</dt><dd><strong>'+escape(value)+'</strong>'+
+      (note ? '<span class="meta">'+escape(note)+'</span>' : '')+'</dd></div>').join('')+'</dl>'+
+    (bySupplier.size > 1 ? '<p class="meta">Mitjana de l’any per proveïdor: '+[...bySupplier].map(([name,items]) => escape(name)+' '+escape(price(average(items)))).join(' · ')+'</p>' : '')+other;
+}
+
 // Últimes compres d'un article (per a la fitxa).
 function articlePurchases(articleId) {
   const purchases = new Map((data.purchases || []).map(item => [item.id,item]));
@@ -2129,8 +2228,10 @@ function articlePurchases(articleId) {
     const purchase = purchases.get(line.purchase_id);
     return '<div class="item purchase-line"><strong>'+escape(dayOf(purchase.date))+'</strong> · '+escape(purchase.supplier_name)+
       '<div class="meta">'+[line.quantity !== null ? quantityFormat.format(line.quantity)+' '+escape(line.unit) : '',
-        line.unit_price !== null ? moneyFormat.format(line.unit_price)+(line.unit ? '/'+escape(line.unit) : '') : '',
-        line.total !== null ? 'Import '+moneyFormat.format(line.total) : ''].filter(Boolean).join(' · ')+'</div></div>';
+        line.unit_price !== null ? moneyFormat.format(line.unit_price)+(line.unit ? '/'+escape(guessSingular(line.unit)) : '') : '',
+        line.total !== null ? 'Import '+moneyFormat.format(line.total) : '',
+        line.price_quantity > 0 && byId('units',line.price_unit_id) && priceOf({total:line.total,unitPrice:line.unit_price,quantity:line.quantity}) !== null
+          ? moneyFormat.format(priceOf({total:line.total,unitPrice:line.unit_price,quantity:line.quantity})/line.price_quantity)+'/'+escape(unitShort(byId('units',line.price_unit_id))) : ''].filter(Boolean).join(' · ')+'</div></div>';
   }).join('');
 }
 
@@ -2153,11 +2254,25 @@ function purchasesView() {
 
 document.addEventListener('input',event => {
   const form = event.target.form;
-  if (form?.id !== 'purchase-review' || !/^article-\d+$/.test(event.target.name)) return;
+  const match = /^(article|quantity|unit|price|total|pack)-(\d+)$/.exec(event.target.name || '');
+  if (form?.id !== 'purchase-review' || !match) return;
+  const i = Number(match[2]);
+  const before = invoiceReview.rows[i]?.articleId;
   syncInvoiceReview(form);
-  const i = Number(event.target.name.split('-')[1]);
-  const hint = form.querySelector('[data-article-hint="'+i+'"]');
-  if (hint) hint.innerHTML = articleHint(invoiceReview.rows[i]);
+  const row = invoiceReview.rows[i];
+  if (match[1] === 'article') {
+    const hint = form.querySelector('[data-article-hint="'+i+'"]');
+    if (hint) hint.innerHTML = articleHint(row);
+  }
+  // Si canvia l'article o la unitat, es torna a pintar el camp «… per caixa»; si no, només el preu calculat.
+  if (match[1] === 'article' || match[1] === 'unit') {
+    if (match[1] === 'article' && before !== row.articleId) row.perPack = null;
+    const box = form.querySelector('[data-price-row="'+i+'"]');
+    if (box) box.innerHTML = priceRow(row,i);
+  } else {
+    const text = form.querySelector('[data-price-text="'+i+'"]');
+    if (text) text.innerHTML = priceRowText(row);
+  }
 });
 
 function render() {
