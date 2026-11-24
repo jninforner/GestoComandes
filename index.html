@@ -5,8 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="referrer" content="no-referrer">
 <title>GestoCatalog</title>
-<link rel="icon" type="image/png" href="./icon.png?v=1.27.0">
-<link rel="apple-touch-icon" sizes="180x180" href="./icon.png?v=1.27.0">
+<link rel="icon" type="image/png" href="./icon.png?v=1.28.0">
+<link rel="apple-touch-icon" sizes="180x180" href="./icon.png?v=1.28.0">
 <style>:root{color-scheme:light;--bg:#f7f8fd;--tx:#28377e;--mu:#566598;--ln:#303f91;--surface:#fff;--soft:#f0f2fc;--border:#d4daf1;--field:#b6bfdf;--on:#fff;--red:#b42318;--green:#17734a}
 :root[data-theme=dark]{color-scheme:dark;--bg:#10152c;--tx:#e5e9ff;--mu:#adb8e5;--ln:#a1afff;--surface:#1b2447;--soft:#232f59;--border:#425080;--field:#6371a0;--on:#10152c;--red:#ff9992;--green:#84dbab}
 *{box-sizing:border-box}
@@ -257,9 +257,13 @@ details.order-category[open]>summary{border-radius:11px 11px 0 0}
 }
 .order-state{display:inline-block;margin-inline-start:6px;color:var(--red);font-size:13px;font-weight:650}
 .order-state.is-sent{color:var(--green)}
-.order-day{margin-top:14px}
-.order-day>h3{margin:0;padding:7px 11px;background:var(--soft);border-radius:11px}
-.order-day>h3 .meta{font-weight:500;white-space:nowrap}
+.order-day{margin-top:16px;border:1px solid var(--border);border-radius:12px;background:var(--surface);overflow:hidden}
+.order-day-head{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:9px 12px;background:var(--ln);color:var(--on)}
+.order-day-head strong{font-size:17px}
+.order-day-head .meta{color:var(--on);opacity:.85;white-space:nowrap}
+.order-entry{padding:10px 12px;border-top:1px solid var(--border)}
+.order-day-head+.order-entry{border-top:0}
+.order-entry>.actions{margin-top:8px}
 
 .worker-profiles .worker-profile-item{border-top:1px solid var(--border);padding:10px 0}
 .worker-profile-item>summary,.worker-profile-inactive>summary{cursor:pointer;min-height:34px;display:flex;align-items:center;justify-content:space-between;gap:12px}
@@ -294,7 +298,7 @@ details.order-category[open]>summary{border-radius:11px 11px 0 0}
 <body>
 <main>
 <header class="topbar">
-  <div class="brand"><h1>GestoCatalog</h1><div class="meta version">Versió 1.27.0<span id="sync-state" role="status"></span></div></div>
+  <div class="brand"><h1>GestoCatalog</h1><div class="meta version">Versió 1.28.0<span id="sync-state" role="status"></span></div></div>
   <div class="top-actions">
     <div class="menu-anchor">
       <button id="menu-toggle" type="button" aria-label="Menú" aria-expanded="false" aria-controls="menu-panel" hidden><span aria-hidden="true">☰</span><span class="top-action-label" aria-hidden="true">Menú</span></button>
@@ -882,7 +886,9 @@ document.addEventListener('keydown',event => {
 });
 const dateFormat = new Intl.DateTimeFormat('ca-ES',{dateStyle:'medium',timeStyle:'short',timeZone:'Europe/Madrid'});
 // Historial agrupat per dia: capçalera amb el dia i, a cada comanda, només l'hora.
-const orderDayFormat = new Intl.DateTimeFormat('ca-ES',{weekday:'long',day:'numeric',month:'long',year:'numeric',timeZone:'Europe/Madrid'});
+const orderDayFormat = new Intl.DateTimeFormat('ca-ES',{day:'numeric',month:'long',year:'numeric',timeZone:'UTC'});
+const orderWeekdayFormat = new Intl.DateTimeFormat('ca-ES',{weekday:'long',timeZone:'UTC'});
+const orderKeyFormat = new Intl.DateTimeFormat('en-CA',{year:'numeric',month:'2-digit',day:'2-digit',timeZone:'Europe/Madrid'});
 const orderTimeFormat = new Intl.DateTimeFormat('ca-ES',{timeStyle:'short',timeZone:'Europe/Madrid'});
 const quantityFormat = new Intl.NumberFormat('ca-ES',{maximumSignificantDigits:15});
 let data;
@@ -1000,7 +1006,7 @@ async function save(payload, done, button, success = () => 'Canvis desats.', aft
     afterRender?.();
   } catch (error) {
     setSync('Revisa l’últim canvi');
-    if (error.status === 409 && ['draft','order'].includes(payload.action)) {
+    if (error.status === 409 && ['draft','order','restoreOrder'].includes(payload.action)) {
       try {
         data = await api();
         render();
@@ -1755,10 +1761,10 @@ function history() {
   const orders = [...all].filter(([, lines]) => showAll || lines[0].author_email === me);
   const toggle = data.me?.admin && others ? '<label class="remember-contact"><input type="checkbox" data-show-all-orders'+(showAll ? ' checked' : '')+'> Mostra també les comandes d’altres usuaris ('+others+')</label>' : '';
   // Les comandes ja arriben de la més nova a la més antiga: s'agrupen per dia (hora de Barcelona).
-  const days = Map.groupBy(orders,([, lines]) => orderDayFormat.format(new Date(lines[0].created_at)));
+  const days = Map.groupBy(orders,([, lines]) => orderDayKey(lines[0].created_at));
   return '<article class="card main-card"><h2>Historial de comandes</h2>'+toggle+
-    ([...days].map(([day, dayOrders]) => '<section class="order-day"><h3>'+escape(day.charAt(0).toLocaleUpperCase('ca')+day.slice(1))+
-      ' <span class="meta">· '+dayOrders.length+' '+(dayOrders.length === 1 ? 'comanda' : 'comandes')+'</span></h3>'+
+    ([...days].map(([key, dayOrders]) => '<section class="order-day"><div class="order-day-head"><div><strong>'+escape(orderDayTitle(key))+'</strong>'+
+      '<div class="meta">'+escape(orderDayDate(key))+'</div></div><span class="meta">'+dayOrders.length+' '+(dayOrders.length === 1 ? 'comanda' : 'comandes')+'</span></div>'+
       dayOrders.map(([id, lines]) => {
       const groups = Map.groupBy(lines,line => line.supplier_id);
       const sent = [...groups.keys()].filter(supplier => sentInfo(id,supplier)).length;
@@ -1766,13 +1772,34 @@ function history() {
       const state = done ? '<span class="order-state is-sent">✓ Enviada</span>' :
         '<span class="order-state">Pendent d’enviar'+(sent ? ' · '+sent+' de '+groups.size+' enviats' : '')+'</span>';
       const mine = lines[0].author_email === me;
-      return '<div class="item"><div class="row"><div><strong>'+escape(orderTimeFormat.format(new Date(lines[0].created_at)))+'</strong> '+state+'<div class="meta">'+
+      return '<div class="order-entry"><div><strong>'+escape(orderDayShort(key))+' · '+escape(orderTimeFormat.format(new Date(lines[0].created_at)))+'</strong> '+state+'<div class="meta">'+
         lines.length+' '+(lines.length === 1 ? 'línia' : 'línies')+' · '+groups.size+' '+(groups.size === 1 ? 'proveïdor' : 'proveïdors')+
         '</div>'+(mine ? '' : '<div class="meta">Feta per '+escape(authorName(lines[0].author_email))+'</div>')+'</div>'+
         '<div class="actions"><button data-order="'+escape(id)+'" aria-expanded="'+(id === openOrder)+'">'+(id === openOrder ? 'Amaga' : 'Mostra els missatges')+'</button>'+
-        '<button class="remove" data-delete-order="'+escape(id)+'">Elimina</button></div></div>'+
+        (data.permissions?.order !== false ? '<button data-restore-order="'+escape(id)+'">Recupera per editar</button>' : '')+
+        '<button class="remove" data-delete-order="'+escape(id)+'">Elimina</button></div>'+
         (id === openOrder ? [...groups.values()].map(messageCard).join('') : '')+'</div>';
     }).join('')+'</section>').join('') || empty(all.size ? 'No has fet cap comanda.' : 'Encara no hi ha comandes desades.'))+'</article>';
+}
+
+// Dia de la comanda a Barcelona (AAAA-MM-DD) i com es mostra.
+function orderDayKey(date) {
+  return orderKeyFormat.format(new Date(date));
+}
+function orderDayTitle(key) {
+  const today = orderDayKey(new Date());
+  const yesterday = orderDayKey(Date.now()-864e5);
+  if (key === today) return 'Avui';
+  if (key === yesterday) return 'Ahir';
+  const weekday = orderWeekdayFormat.format(new Date(key+'T12:00:00Z'));
+  return weekday.charAt(0).toLocaleUpperCase('ca')+weekday.slice(1);
+}
+function orderDayDate(key) {
+  return orderDayFormat.format(new Date(key+'T12:00:00Z'));
+}
+function orderDayShort(key) {
+  const [, month, day] = key.split('-');
+  return Number(day)+'/'+Number(month);
 }
 
 function contactControls() {
@@ -1853,9 +1880,27 @@ function unitLabel(unitName, quantity) {
   return unit?.singular || guessSingular(unitName);
 }
 
+// «de» + nom de l'article, apostrofat davant de vocal o de h + vocal (d'oli, d'ous, d'herbes),
+// però no davant de i/u que fan de consonant (de iogurt, de hielo).
+// En minúscula (és un nom comú), tret que tingui altres majúscules: marques o sigles (Coca-Cola, IGP).
+function ofArticle(name) {
+  const raw = String(name ?? '').trim();
+  const text = /\p{Lu}/u.test(raw.slice(1)) ? raw : raw.charAt(0).toLocaleLowerCase('ca')+raw.slice(1);
+  const lower = text.toLocaleLowerCase('ca');
+  const vowel = /^h?[aàeèéiíïoòóuúü]/.test(lower) && !/^h?[iu][aàeèéiíoòóuú]/.test(lower);
+  return (vowel ? 'd’' : 'de ')+text;
+}
+
 function supplierMessage(lines, current, recipient) {
   const supplier = lines[0];
-  const articles = lines.map(line => '• '+quantityFormat.format(line.quantity)+' '+unitLabel(line.unit,Number(line.quantity))+' de '+line.article).join('\n');
+  // Agrupats per categoria (ordre alfabètic, «Sense categoria» al final), articles en ordre alfabètic
+  // i una línia en blanc entre categories.
+  const sort = (a,b) => a.localeCompare(b,'ca',{sensitivity:'base'});
+  const categories = Map.groupBy(lines,line => byId('articles',line.article_id)?.category_id || '');
+  const articles = [...categories].sort(([a],[b]) => !a ? 1 : !b ? -1 : sort(categoryName(a),categoryName(b)))
+    .map(([, items]) => [...items].sort((a,b) => sort(a.article,b.article))
+      .map(line => '• '+quantityFormat.format(line.quantity)+' '+unitLabel(line.unit,Number(line.quantity))+' '+ofArticle(line.article)).join('\n'))
+    .join('\n\n');
   const contact = recipient || current?.contact || supplier.contact;
   const template = supplier.message_template ?? current?.message_template;
   const hello = contact ? 'Bon dia, '+contact+'!' : 'Bon dia!';
@@ -1883,7 +1928,7 @@ function messageCard(lines) {
       '<button data-order-sent="'+escape(supplier.order_id)+'" data-supplier="'+escape(supplier.supplier_id)+'" data-sent="0">Desmarca</button></div>'
     : '<div class="row"><span class="order-state">Pendent d’enviar</span>'+
       '<button class="primary" data-order-sent="'+escape(supplier.order_id)+'" data-supplier="'+escape(supplier.supplier_id)+'" data-sent="1">Marca com a enviat</button></div>';
-  return '<section class="item"><h3>'+escape(supplier.supplier)+'</h3>'+sentControls+'<label>Missatge<textarea readonly rows="'+Math.min(13,lines.length+4)+'">'+escape(message)+'</textarea></label>'+
+  return '<section class="item"><h3>'+escape(supplier.supplier)+'</h3>'+sentControls+'<label>Missatge<textarea readonly rows="'+Math.min(18,message.split('\n').length+1)+'">'+escape(message)+'</textarea></label>'+
     '<div class="actions"><button data-copy>Copia el missatge</button>'+
     (!phone && current ? '<a href="'+escape(whatsappLink('',message))+'">Tria dins de WhatsApp</a>' : '')+'</div>'+chooser+'</section>';
 }
@@ -2321,6 +2366,25 @@ document.addEventListener('click',async event => {
     const markSent = target.sent === '1';
     await save({action:'orderSent',id:target.orderSent,supplier:target.supplier,sent:markSent},null,button,
       () => markSent ? 'Missatge marcat com a enviat.' : 'Missatge marcat com a pendent.');
+  } else if (target.restoreOrder) {
+    const id = target.restoreOrder;
+    const lines = data.lines.filter(line => line.order_id === id);
+    if (!lines.length) return;
+    await flushDraft();
+    const pending = data.draft.lines.length;
+    const sent = new Set(lines.map(line => line.supplier_id).filter(supplier => sentInfo(id,supplier))).size;
+    const question = 'Vols passar els '+lines.length+(lines.length === 1 ? ' article' : ' articles')+' d’aquesta comanda a «Nova comanda» per editar-la?'+
+      (pending ? ' S’afegiran '+(pending === 1 ? 'a l’article' : 'als '+pending+' articles')+' que ja hi tens.' : '')+
+      (sent ? ' Ja n’havies enviat '+(sent === 1 ? '1 missatge' : sent+' missatges')+'.' : '')+
+      ' La comanda i els seus missatges s’eliminaran de l’historial.';
+    if (!window.confirm(question)) return;
+    await save({action:'restoreOrder',id,revision:data.draft.revision},() => {
+      if (openOrder === id) openOrder = '';
+      onlyOrdered = true;
+      orderCategory = '';
+      orderSupplier = '';
+      section = 'order';
+    },button,() => 'Comanda recuperada: ja la pots editar a «Nova comanda».');
   } else if (target.deleteOrder) {
     const id = target.deleteOrder;
     const lines = data.lines.filter(line => line.order_id === id);
