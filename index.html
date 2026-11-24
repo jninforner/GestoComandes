@@ -5,8 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="referrer" content="no-referrer">
 <title>GestoCatalog</title>
-<link rel="icon" type="image/png" href="./icon.png?v=1.20.0">
-<link rel="apple-touch-icon" sizes="180x180" href="./icon.png?v=1.20.0">
+<link rel="icon" type="image/png" href="./icon.png?v=1.21.0">
+<link rel="apple-touch-icon" sizes="180x180" href="./icon.png?v=1.21.0">
 <style>:root{color-scheme:light;--bg:#f7f8fd;--tx:#28377e;--mu:#566598;--ln:#303f91;--surface:#fff;--soft:#f0f2fc;--border:#d4daf1;--field:#b6bfdf;--on:#fff;--red:#b42318;--green:#17734a}
 :root[data-theme=dark]{color-scheme:dark;--bg:#10152c;--tx:#e5e9ff;--mu:#adb8e5;--ln:#a1afff;--surface:#1b2447;--soft:#232f59;--border:#425080;--field:#6371a0;--on:#10152c;--red:#ff9992;--green:#84dbab}
 *{box-sizing:border-box}
@@ -219,6 +219,11 @@ img,video,canvas{max-width:100%;height:auto}
 .bulk-submit{display:flex;align-items:flex-end}
 .catalog-new>summary{cursor:pointer;font-weight:700;font-size:17px}
 .catalog-new[open]>summary{margin-bottom:10px}
+.bulk-log{border:1px solid var(--main-border,var(--border));border-radius:12px;padding:12px;margin:10px 0}
+.bulk-log .row{align-items:center}
+.bulk-log details{margin-top:6px}
+.bulk-log summary{cursor:pointer}
+.bulk-log p{margin:4px 0 0 16px}
 
 .worker-profiles .worker-profile-item{border-top:1px solid var(--border);padding:10px 0}
 .worker-profile-item>summary,.worker-profile-inactive>summary{cursor:pointer;min-height:34px;display:flex;align-items:center;justify-content:space-between;gap:12px}
@@ -253,7 +258,7 @@ img,video,canvas{max-width:100%;height:auto}
 <body>
 <main>
 <header class="topbar">
-  <div class="brand"><h1>GestoCatalog</h1><div class="meta version">Versió 1.20.0<span id="sync-state" role="status"></span></div></div>
+  <div class="brand"><h1>GestoCatalog</h1><div class="meta version">Versió 1.21.0<span id="sync-state" role="status"></span></div></div>
   <div class="top-actions">
     <div class="menu-anchor">
       <button id="menu-toggle" type="button" aria-label="Menú" aria-expanded="false" aria-controls="menu-panel" hidden><span aria-hidden="true">☰</span><span class="top-action-label" aria-hidden="true">Menú</span></button>
@@ -825,6 +830,8 @@ let categoryFilter = '';
 let supplierFilter = '';
 let archivedArticles = false;
 const mergeSelection = new Set();
+// Registre dels últims canvis fets a diversos articles alhora (només durant la sessió).
+const bulkLog = [];
 let addingArticle = '';
 let pdfReview;
 let readingPdf = false;
@@ -1140,7 +1147,7 @@ const trashIcon = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16"
 // Accions per als articles marcats: arxivar/restaurar, eliminar, assignar proveïdor i fusionar.
 function articleMergeControls() {
   const selected = data.articles.filter(article => mergeSelection.has(article.id));
-  if (!selected.length) return '';
+  if (!selected.length) return bulkLogCard();
   const units = data.units.filter(unit => unit.id !== pendingUnit);
   return '<div class="bulk-bar"><strong>'+selected.length+(selected.length === 1 ? ' article marcat' : ' articles marcats')+'</strong>'+
     '<div class="actions"><button type="button" data-bulk="archive">'+(archivedArticles ? 'Restaura' : 'Arxiva')+'</button>'+
@@ -1149,9 +1156,28 @@ function articleMergeControls() {
     '<form id="bulk-supplier" class="grid"><label>Assigna un proveïdor<select name="supplier" required>'+options(data.suppliers,'','Tria un proveïdor')+'</select></label>'+
     '<label>Unitat de compra<select name="unit">'+options(units,'','La de cada article')+'</select></label>'+
     '<div class="bulk-submit"><button>Assigna</button></div></form>'+
+    '<form id="bulk-category" class="grid"><label>Assigna una categoria<select name="category" required>'+
+      options([...data.categories].sort((a,b) => a.name.localeCompare(b.name,'ca')),'','Tria una categoria')+'<option value="-">Sense categoria</option></select></label>'+
+    '<div class="bulk-submit"><button>Assigna</button></div></form>'+
     (selected.length > 1 ? '<form id="merge-articles" class="grid"><label>Fusiona’ls en un sol article<select name="target" required>'+
       options(selected,'','Tria l’article que es conservarà')+'</select></label><div class="bulk-submit"><button>Fusiona '+selected.length+' articles</button></div></form>' : '')+
-    '</div>';
+    '</div>'+bulkLogCard();
+}
+
+// Constància dels canvis múltiples: què s'ha fet, a quina hora i a quins articles.
+function logBulk(text, names, failed = []) {
+  const time = new Date().toLocaleTimeString('ca-ES',{hour:'2-digit',minute:'2-digit'});
+  bulkLog.unshift({time,text,names,failed});
+  bulkLog.splice(10);
+}
+
+function bulkLogCard() {
+  if (!bulkLog.length) return '';
+  return '<div class="bulk-log" id="bulk-log"><div class="row"><strong>Últims canvis fets</strong>'+
+    '<button type="button" id="clear-bulk-log">Esborra la llista</button></div>'+
+    bulkLog.map((entry,i) => '<details'+(i === 0 ? ' open' : '')+'><summary><span class="meta">'+escape(entry.time)+'</span> '+escape(entry.text)+'</summary>'+
+      (entry.names.length ? '<p class="meta">'+entry.names.map(escape).join(', ')+'</p>' : '')+
+      (entry.failed.length ? '<p class="error">No s’ha pogut fer amb: '+entry.failed.map(escape).join(', ')+'</p>' : '')+'</details>').join('')+'</div>';
 }
 
 async function runBulk(payloads, button, describe) {
@@ -1161,14 +1187,20 @@ async function runBulk(payloads, button, describe) {
   setSync('Desant…');
   let done = 0;
   const failed = [];
+  const names = [];
   for (const [name,payload] of payloads) {
-    try { await api(payload); done += 1; } catch { failed.push(name); }
+    try { await api(payload); done += 1; names.push(name); } catch { failed.push(name); }
   }
   try { data = await api(); } catch { /* es manté la vista anterior */ }
   busy = false;
   setSync(readyStatus);
+  const text = describe(done);
+  logBulk(text,names,failed);
+  // Un cop aplicat el canvi, els articles es desmarquen.
+  mergeSelection.clear();
   render();
-  notify(describe(done)+(failed.length ? ' No s’ha pogut fer amb: '+failed.join(', ')+'.' : ''),failed.length > 0);
+  notify(text+(failed.length ? ' No s’ha pogut fer amb: '+failed.join(', ')+'.' : ''),failed.length > 0);
+  document.querySelector('#bulk-log')?.scrollIntoView({block:'nearest'});
 }
 
 function catalogRows() {
@@ -1873,6 +1905,9 @@ document.addEventListener('click',async event => {
   } else if (button.id === 'clear-article-merge') {
     mergeSelection.clear();
     render();
+  } else if (button.id === 'clear-bulk-log') {
+    bulkLog.length = 0;
+    document.querySelector('#article-merge-controls').innerHTML = articleMergeControls();
   } else if (target.archiveArticle || target.deleteArticle) {
     const article = byId('articles',target.archiveArticle || target.deleteArticle);
     if (!article) return;
@@ -2099,7 +2134,9 @@ document.addEventListener('submit',async event => {
     const sources = [...mergeSelection].filter(id => id !== values.target);
     if (!target || !mergeSelection.has(target.id) || !sources.length) return;
     if (!window.confirm('Vols fusionar '+sources.length+' articles amb «'+target.name+'»? Es conservarà l’històric.')) return;
+    const sourceNames = sources.map(id => byId('articles',id)?.name).filter(Boolean);
     await save({action:'mergeArticles',id:target.id,sources},() => {
+      logBulk(sources.length+(sources.length === 1 ? ' article fusionat' : ' articles fusionats')+' amb «'+target.name+'».',sourceNames);
       mergeSelection.clear();
       addingArticle = '';
       edit = target.id;
@@ -2168,6 +2205,13 @@ document.addEventListener('submit',async event => {
     if (missing.length) { notify('Tria una unitat de compra: '+missing.map(article => article.name).join(', ')+' no en té.',true); return; }
     await runBulk(selected.map(article => [article.name,{action:'offer',article:article.id,supplier:supplier.id,unit:values.unit || article.unit_id}]),event.submitter,
       done => supplier.name+' assignat a '+done+(done === 1 ? ' article.' : ' articles.'));
+  } else if (form.id === 'bulk-category') {
+    const selected = data.articles.filter(article => mergeSelection.has(article.id));
+    const none = values.category === '-';
+    const category = none ? null : byId('categories',values.category);
+    if ((!none && !category) || !selected.length) return;
+    await runBulk(selected.map(article => [article.name,{action:'articles',id:article.id,name:article.name,category:category?.id || '',unit:article.unit_id || ''}]),event.submitter,
+      done => (none ? 'Categoria treta de ' : 'Categoria «'+category.name+'» assignada a ')+done+(done === 1 ? ' article.' : ' articles.'));
   } else if (form.id === 'catalog-edit') {
     if (form.dataset.section === 'suppliers' && values.phone.trim()) {
       values.phone = whatsappPhone(values.phone);
@@ -2181,7 +2225,11 @@ document.addEventListener('submit',async event => {
       form.closest('dialog')?.close();
     },event.submitter);
   } else if (form.id === 'article-sheet') {
-    await save({...values,action:'articles',id:sheetId},null,event.submitter,()=>'Fitxa desada.');
+    // En desar la fitxa, el diàleg d'edició es tanca.
+    await save({...values,action:'articles',id:sheetId},() => {
+      sheetId = '';
+      form.closest('dialog')?.close();
+    },event.submitter,()=>'Fitxa desada.');
   } else if (form.id === 'offer') {
     await save({...values,action:'offer',article:edit},null,event.submitter);
   } else if (form.id === 'quick-article') {
