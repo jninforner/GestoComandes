@@ -572,7 +572,22 @@ function renderAppleContactPicker() {
     '<a class="button" href="shortcuts://run-shortcut?name=Nexa%20Contacte%202">Tria el contacte</a>'+
     '<label>Enganxa el contacte<textarea rows="3" data-worker-contact-paste spellcheck="false" autocapitalize="off"></textarea></label>'+
     '<button type="button" data-worker-apply-paste>Carrega el contacte</button>'+
-    '<details class="item"><summary>Instal·la la drecera (només el primer cop)</summary>'+
+    (workerShortcutReady()
+      ? '<p class="meta"><a href="https://jninforner.github.io/NexaTips/Nexa%20Contacte%202.shortcut">Reinstal·la la drecera</a></p></details>'
+      : renderShortcutInstall());
+}
+
+// Un cop la drecera ha funcionat en aquest dispositiu, s'amaguen les instruccions d'instal·lació.
+const WORKER_SHORTCUT_KEY = 'gesto-contact-shortcut-ok';
+function workerShortcutReady() {
+  try { return localStorage.getItem(WORKER_SHORTCUT_KEY) === '1'; } catch { return false; }
+}
+function markWorkerShortcutReady() {
+  try { localStorage.setItem(WORKER_SHORTCUT_KEY,'1'); } catch {}
+}
+
+function renderShortcutInstall() {
+  return '<details class="item"><summary>Instal·la la drecera (només el primer cop)</summary>'+
     '<p><a class="button" href="https://jninforner.github.io/NexaTips/Nexa%20Contacte%202.shortcut">Instal·la la drecera Nexa Contacte 2</a></p>'+
     '<p class="meta">O bé configura-la a mà:</p>'+
     '<ol><li>A l’app Dreceres, crea una drecera que es digui <strong>Nexa Contacte 2</strong>.</li>'+
@@ -691,6 +706,7 @@ function bindWorkerContacts(container) {
         return;
       }
       fillWorkerContact(form,contact);
+      if (workerContactFromShortcut(input.value)) markWorkerShortcutReady();
       input.value = '';
       form.querySelector('[data-worker-ios-panel]').open = false;
       return;
