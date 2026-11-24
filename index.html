@@ -5,8 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="referrer" content="no-referrer">
 <title>GestoCatalog</title>
-<link rel="icon" type="image/png" href="./icon.png?v=1.32.0">
-<link rel="apple-touch-icon" sizes="180x180" href="./icon.png?v=1.32.0">
+<link rel="icon" type="image/png" href="./icon.png?v=1.33.0">
+<link rel="apple-touch-icon" sizes="180x180" href="./icon.png?v=1.33.0">
 <style>:root{color-scheme:light;--bg:#f7f8fd;--tx:#28377e;--mu:#566598;--ln:#303f91;--surface:#fff;--soft:#f0f2fc;--border:#d4daf1;--field:#b6bfdf;--on:#fff;--red:#b42318;--green:#17734a}
 :root[data-theme=dark]{color-scheme:dark;--bg:#10152c;--tx:#e5e9ff;--mu:#adb8e5;--ln:#a1afff;--surface:#1b2447;--soft:#232f59;--border:#425080;--field:#6371a0;--on:#10152c;--red:#ff9992;--green:#84dbab}
 *{box-sizing:border-box}
@@ -272,7 +272,7 @@ details.order-category[open]>summary{border-radius:11px 11px 0 0}
 .order-day-head strong{font-size:17px}
 .order-day-head .meta{color:var(--on);opacity:.85;white-space:nowrap}
 .order-entry{padding:10px 12px;border-top:1px solid var(--border)}
-.order-day-head+.order-entry{border-top:0}
+.order-day-head+.order-entry,.order-day-head+.swipe>.order-entry{border-top:0}
 .order-entry>.actions{margin-top:8px}
 .sheet-name{display:block;margin-bottom:12px}
 .sheet-pair{grid-template-columns:repeat(2,minmax(0,1fr))}
@@ -288,6 +288,23 @@ details.order-category[open]>summary{border-radius:11px 11px 0 0}
 /* Diàleg «A qui ho demanem?»: un botó per proveïdor */
 .supplier-choice{display:grid;gap:8px;margin-top:10px}
 .supplier-choice button{width:100%;justify-content:flex-start;min-height:48px}
+/* Lliscar (ESTIL.md): cap a l'esquerra elimina (vermell); cap a la dreta arxiva o recupera (blau) */
+.swipe{position:relative;overflow:hidden;touch-action:pan-y;-webkit-user-select:none;user-select:none}
+.swipe>.swipe-bg{position:absolute;inset:0;display:none;align-items:center;padding:0 18px;color:var(--on)}
+.swipe.left>.swipe-bg{display:flex;justify-content:flex-end;background:var(--red)}
+.swipe.right>.swipe-bg{display:flex;justify-content:flex-start;background:var(--ln)}
+.swipe>.swipe-bg svg{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.swipe>.swipe-row{position:relative}
+#status .undo-button{min-height:32px;margin-inline-start:10px;padding:4px 12px;font-size:14px}
+/* Paperera */
+.trash-list{margin-top:10px;border:1px solid var(--border);border-radius:12px;overflow:hidden;background:var(--surface)}
+.trash-list>.meta{padding:12px;margin:0}
+.trash-row{display:flex;flex-direction:column;gap:2px;padding:10px 12px;min-height:44px;justify-content:center}
+.swipe+.swipe>.trash-row{border-top:1px solid var(--border)}
+.trash-row strong,.trash-row .meta{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.swipe.dragging{position:relative;z-index:2;overflow:visible}
+.swipe.dragging>.catalog-row{box-shadow:0 6px 18px rgba(0,0,0,.18);border-radius:10px;opacity:.95}
+.swipe>.item.swipe-row{padding-bottom:8px}
 
 .worker-profiles .worker-profile-item{border-top:1px solid var(--border);padding:10px 0}
 .worker-profile-item>summary,.worker-profile-inactive>summary{cursor:pointer;min-height:34px;display:flex;align-items:center;justify-content:space-between;gap:12px}
@@ -322,7 +339,7 @@ details.order-category[open]>summary{border-radius:11px 11px 0 0}
 <body>
 <main>
 <header class="topbar">
-  <div class="brand"><h1>GestoCatalog</h1><div class="meta version">Versió 1.32.0<span id="sync-state" role="status"></span></div></div>
+  <div class="brand"><h1>GestoCatalog</h1><div class="meta version">Versió 1.33.0<span id="sync-state" role="status"></span></div></div>
   <div class="top-actions">
     <div class="menu-anchor">
       <button id="menu-toggle" type="button" aria-label="Menú" aria-expanded="false" aria-controls="menu-panel" hidden><span aria-hidden="true">☰</span><span class="top-action-label" aria-hidden="true">Menú</span></button>
@@ -880,7 +897,7 @@ async function connectNexaMar(email, password, apiKey) {
 
 function mountApp(request, initialData) {
 const pendingUnit = 'pending-supplier-unit';
-const sections = {purchases:'Albarans', order:'Nova comanda', history:'Historial de comandes', articles:'Articles', suppliers:'Proveïdors', categories:'Categories', units:'Unitats'};
+const sections = {purchases:'Albarans', order:'Nova comanda', history:'Historial de comandes', articles:'Articles', suppliers:'Proveïdors', categories:'Categories', units:'Unitats', trash:'Paperera'};
 const content = document.querySelector('#content');
 const status = document.querySelector('#status');
 const tabs = document.querySelector('#tabs');
@@ -980,8 +997,10 @@ async function api(body) {
 // Els avisos surten flotant a baix de la pantalla, sempre visibles on s'està treballant.
 // Si hi ha una pantalla emergent oberta, l'avís es mostra a sobre d'ella. Els d'èxit marxen sols; els d'error, en prémer-los.
 let notifyTimer = 0;
+let undoAction = null;
 function notify(message, error = false) {
   clearTimeout(notifyTimer);
+  undoAction = null;
   const dialog = document.querySelector('dialog[open]');
   const home = document.querySelector('#workspace');
   const parent = dialog || home;
@@ -991,7 +1010,27 @@ function notify(message, error = false) {
   status.title = message ? (error ? 'Prem per tancar l’avís' : '') : '';
   if (message && !error) notifyTimer = setTimeout(() => { status.textContent = ''; },6000);
 }
-status.addEventListener('click',() => notify(''));
+status.addEventListener('click',event => { if (!event.target.closest('[data-undo]')) notify(''); });
+// Avís amb el botó «Desfés» (ESTIL.md): dura el mateix que els avisos d'èxit.
+function notifyUndo(message, undo, error = false) {
+  notify(message,error);
+  if (!message || !undo) return;
+  const button = document.createElement('button');
+  button.type = 'button';
+  button.className = 'undo-button';
+  button.dataset.undo = '';
+  button.textContent = 'Desfés';
+  status.append(' ',button);
+  undoAction = undo;
+}
+// Desa un canvi i, si va bé, ofereix «Desfés». Retorna si s'ha desat.
+async function saveWithUndo(payload, done, button, message, undo) {
+  let result;
+  await save(payload,saved => { result = saved; done?.(saved); },button,() => message,() => {
+    if (result) notifyUndo(typeof message === 'function' ? message(result) : message,() => undo(result));
+  });
+  return Boolean(result);
+}
 // Els camps obligatoris buits també avisen amb el mateix missatge flotant (en lloc de la bombolla del navegador).
 let invalidShown = false;
 document.addEventListener('invalid',event => {
@@ -1107,6 +1146,7 @@ function openCatalogEditor(item) {
     '<form id="catalog-edit" data-section="'+section+'" data-id="'+escape(item.id)+'">'+catalogFields(item)+
     '</form></section>'+
     '<div class="actions sheet-foot"><button class="primary" form="catalog-edit">Desa</button>'+
+    '<button type="button" class="remove" data-delete-item="'+catalogKind[section]+':'+escape(item.id)+'">Elimina</button>'+
     '<button type="button" id="close-order-dialog-foot">Cancel·la</button></div>';
   if (!dialog.open) dialog.showModal();
 }
@@ -1354,16 +1394,18 @@ function bulkLogCard() {
       (entry.failed.length ? '<p class="error">No s’ha pogut fer amb: '+entry.failed.map(escape).join(', ')+'</p>' : '')+'</details>').join('')+'</div>';
 }
 
-async function runBulk(payloads, button, describe) {
+async function runBulk(payloads, button, describe, undo) {
   if (busy) return;
   busy = true;
-  button.disabled = true;
+  if (button) button.disabled = true;
   setSync('Desant…');
   let done = 0;
   const failed = [];
   const names = [];
+  const results = [];
+  const succeeded = [];
   for (const [name,payload] of payloads) {
-    try { await api(payload); done += 1; names.push(name); } catch { failed.push(name); }
+    try { results.push(await api(payload)); succeeded.push([name,payload]); done += 1; names.push(name); } catch { failed.push(name); }
   }
   try { data = await api(); } catch { /* es manté la vista anterior */ }
   busy = false;
@@ -1373,11 +1415,12 @@ async function runBulk(payloads, button, describe) {
   // Un cop aplicat el canvi, els articles es desmarquen.
   mergeSelection.clear();
   render();
-  notify(text+(failed.length ? ' No s’ha pogut fer amb: '+failed.join(', ')+'.' : ''),failed.length > 0);
+  notifyUndo(text+(failed.length ? ' No s’ha pogut fer amb: '+failed.join(', ')+'.' : ''),undo && done ? () => undo(results,succeeded) : null,failed.length > 0);
   document.querySelector('#bulk-log')?.scrollIntoView({block:'nearest'});
 }
 
 // Llistat de proveïdors, unitats i categories (els articles fan servir la llista comuna, articleList).
+const catalogKind = {suppliers:'supplier',units:'unit',categories:'category'};
 function catalogRows() {
   const isSupplier = section === 'suppliers';
   const names = {suppliers:'proveïdor',units:'unitat',categories:'categoria'};
@@ -1392,11 +1435,12 @@ function catalogRows() {
     const move = section === 'categories'
       ? '<button type="button" class="drag-handle" data-category-drag="'+escape(item.id)+'" title="Arrossega per canviar l’ordre" aria-label="Mou '+escape(item.name)+' (fletxes amunt i avall)">'+dragIcon+'</button>'
       : '';
-    return '<div class="catalog-row'+(move ? ' with-move' : '')+'"'+(move ? ' data-category-row="'+escape(item.id)+'"' : '')+'>'+move+
+    // Lliscar cap a l'esquerra elimina (va a la Paperera).
+    return swipeOpen(catalogKind[section]+':'+item.id,true,false)+'<div class="catalog-row swipe-row'+(move ? ' with-move' : '')+'"'+(move ? ' data-category-row="'+escape(item.id)+'"' : '')+'>'+move+
       (isSupplier || section === 'categories'
         ? '<button type="button" class="article-open" data-browse-articles="'+escape(item.id)+'" title="Mostra els articles de '+escape(full)+'">'+label+'</button>'
         : '<span class="catalog-name" title="'+escape(full)+'">'+label+'</span>')+
-      '<button type="button" class="icon-button" data-catalog-edit="'+escape(item.id)+'" title="Edita" aria-haspopup="dialog" aria-label="Edita '+escape(item.name)+'">'+pencilIcon+'</button></div>';
+      '<button type="button" class="icon-button" data-catalog-edit="'+escape(item.id)+'" title="Edita" aria-haspopup="dialog" aria-label="Edita '+escape(item.name)+'">'+pencilIcon+'</button></div></div>';
   });
   return rows.join('') || empty('Cap '+names[section]+' per mostrar.');
 }
@@ -1520,9 +1564,9 @@ function articleList(mode) {
     items.sort(byName);
     const marked = items.filter(article => mode === 'order' ? byArticle.has(article.id) : mergeSelection.has(article.id)).length;
     const rows = items.map(article => {
-      if (mode === 'articles') return selectListRow(article);
+      if (mode === 'articles') return articleSwipe(article,selectListRow(article));
       const lines = byArticle.get(article.id);
-      return lines ? lines.map(line => orderListRow(article,line,draft.indexOf(line))).join('') : orderListRow(article);
+      return articleSwipe(article,lines ? lines.map(line => orderListRow(article,line,draft.indexOf(line))).join('') : orderListRow(article));
     }).join('');
     return categoryGroup(mode,category,items.length+(items.length === 1 ? ' article' : ' articles')+(marked ? ' · ✓ '+marked : ''),rows,Boolean(query || state.category));
   }).join('');
@@ -1844,6 +1888,7 @@ function history() {
   // Les comandes ja arriben de la més nova a la més antiga: s'agrupen per dia (hora de Barcelona).
   const days = Map.groupBy(orders,([, lines]) => orderDayKey(lines[0].created_at));
   return '<article class="card main-card"><h2>Historial de comandes</h2>'+toggle+
+    (orders.length ? '<p class="meta">Llisca una comanda cap a l’esquerra per eliminar-la. Es pot recuperar des de la Paperera durant 30 dies.</p>' : '')+
     ([...days].map(([key, dayOrders]) => '<section class="order-day"><div class="order-day-head"><div><strong>'+escape(orderDayTitle(key))+'</strong>'+
       '<div class="meta">'+escape(orderDayDate(key))+'</div></div><span class="meta">'+dayOrders.length+' '+(dayOrders.length === 1 ? 'comanda' : 'comandes')+'</span></div>'+
       dayOrders.map(([id, lines]) => {
@@ -1853,15 +1898,217 @@ function history() {
       const state = done ? '<span class="order-state is-sent">✓ Enviada</span>' :
         '<span class="order-state">Pendent d’enviar'+(sent ? ' · '+sent+' de '+groups.size+' enviats' : '')+'</span>';
       const mine = lines[0].author_email === me;
-      return '<div class="order-entry"><div><strong>'+escape(orderDayShort(key))+' · '+escape(orderTimeFormat.format(new Date(lines[0].created_at)))+'</strong> '+state+'<div class="meta">'+
+      return swipeOpen('order:'+id,true,false)+'<div class="order-entry swipe-row"><div><strong>'+escape(orderDayShort(key))+' · '+escape(orderTimeFormat.format(new Date(lines[0].created_at)))+'</strong> '+state+'<div class="meta">'+
         lines.length+' '+(lines.length === 1 ? 'línia' : 'línies')+' · '+groups.size+' '+(groups.size === 1 ? 'proveïdor' : 'proveïdors')+
         '</div>'+(mine ? '' : '<div class="meta">Feta per '+escape(authorName(lines[0].author_email))+'</div>')+'</div>'+
         '<div class="actions"><button data-order="'+escape(id)+'" aria-expanded="'+(id === openOrder)+'">'+(id === openOrder ? 'Amaga' : 'Mostra els missatges')+'</button>'+
-        (data.permissions?.order !== false ? '<button data-restore-order="'+escape(id)+'">Recupera per editar</button>' : '')+
-        '<button class="remove" data-delete-order="'+escape(id)+'">Elimina</button></div>'+
-        (id === openOrder ? [...groups.values()].map(messageCard).join('') : '')+'</div>';
+        (data.permissions?.order !== false ? '<button data-restore-order="'+escape(id)+'">Recupera per editar</button>' : '')+'</div>'+
+        (id === openOrder ? [...groups.values()].map(messageCard).join('') : '')+'</div></div>';
     }).join('')+'</section>').join('') || empty(all.size ? 'No has fet cap comanda.' : 'Encara no hi ha comandes desades.'))+'</article>';
 }
+
+// ---- Lliscar per eliminar o arxivar, Desfés i Paperera (ESTIL.md) ----
+// Cap a l'esquerra = eliminar (va a la Paperera 30 dies). Cap a la dreta = arxivar (o restaurar). Sense confirmació i amb Desfés.
+const trashDays = 30;
+const dayMs = 864e5;
+// Fila lliscable: swipeOpen(clau, es pot eliminar, es pot arxivar/restaurar, icona de la dreta) + fila amb la classe «swipe-row» + '</div>'.
+function swipeOpen(key, left, right, rightIcon = 'archive') {
+  return '<div class="swipe" data-swipe="'+escape(key)+'"'+(left ? ' data-left="1"' : '')+(right ? ' data-right="1" data-right-icon="'+rightIcon+'"' : '')+'><div class="swipe-bg" aria-hidden="true"></div>';
+}
+// Articles (pantalles Articles i Nova comanda): només si es té el permís «Articles».
+function articleSwipe(article, rows) {
+  if (data.permissions && !data.permissions.articles) return rows;
+  return swipeOpen('article:'+article.id,true,true,article.archived ? 'restore' : 'archive')+'<div class="swipe-row">'+rows+'</div></div>';
+}
+function closeSheetOf(id) {
+  if (edit === id) edit = '';
+  if (addingArticle === id) addingArticle = '';
+  mergeSelection.delete(id);
+  if (sheetId === id) { sheetId = ''; document.querySelector('#order-dialog')?.close(); }
+}
+function deleteArticleNow(article, button) {
+  return saveWithUndo({action:'deleteArticle',id:article.id},() => closeSheetOf(article.id),button,'S’ha eliminat «'+article.name+'».',
+    result => save({action:'restoreTrash',ids:[result.trash]},null,null,() => 'S’ha recuperat «'+article.name+'».'));
+}
+function archiveArticleNow(article, button) {
+  const archived = !article.archived;
+  return saveWithUndo({action:'archiveArticle',id:article.id,archived},() => { if (edit === article.id) edit = ''; },button,
+    'S’ha '+(archived ? 'arxivat' : 'restaurat')+' «'+article.name+'».',
+    () => save({action:'archiveArticle',id:article.id,archived:!archived},null,null,() => 'S’ha desfet el canvi de «'+article.name+'».'));
+}
+const itemLabels = {supplier:'el proveïdor',category:'la categoria',unit:'la unitat',purchase:'l’albarà'};
+function itemName(kind, id) {
+  if (kind === 'purchase') {
+    const purchase = (data.purchases || []).find(item => item.id === id);
+    return purchase ? purchase.supplier_name+' ('+dayOf(purchase.date)+')' : '';
+  }
+  return byId({supplier:'suppliers',category:'categories',unit:'units'}[kind],id)?.name || '';
+}
+// Proveïdors, categories, unitats i albarans: sense confirmació i amb Desfés.
+function deleteItemNow(kind, id, button) {
+  const name = itemName(kind,id);
+  return saveWithUndo({action:'deleteItem',kind,id},() => {
+    if (kind === 'purchase' && openPurchase === id) openPurchase = '';
+    if (kind === 'supplier' && supplierFilter === id) supplierFilter = '';
+    button?.closest('dialog')?.close();
+  },button,'S’ha eliminat '+itemLabels[kind]+' «'+name+'».',
+    result => save({action:'restoreTrash',ids:[result.trash]},null,null,() => 'S’ha recuperat «'+name+'».'));
+}
+function orderTitle(date) {
+  return 'Comanda del '+dateFormat.format(new Date(date));
+}
+function deleteOrderNow(id, button) {
+  const lines = data.lines.filter(line => line.order_id === id);
+  if (!lines.length) return false;
+  const title = orderTitle(lines[0].created_at);
+  return saveWithUndo({action:'deleteOrder',id},() => { if (openOrder === id) openOrder = ''; },button,'S’ha eliminat la '+title.charAt(0).toLowerCase()+title.slice(1)+'.',
+    result => save({action:'restoreTrash',ids:[result.trash]},null,null,() => 'S’ha recuperat la comanda.'));
+}
+function trashName(item) {
+  return item.kind === 'order' ? orderTitle(item.name) : item.name;
+}
+const trashKinds = {article:'Article',order:'Comanda',supplier:'Proveïdor',category:'Categoria',unit:'Unitat',purchase:'Albarà'};
+// A la Paperera: cap a la dreta es recupera (torna on era); cap a l'esquerra s'esborra definitivament. Tot amb Desfés.
+function restoreTrashNow(item) {
+  const name = trashName(item);
+  return saveWithUndo({action:'restoreTrash',ids:[item.id]},null,null,'S’ha recuperat «'+name+'».',
+    () => save(item.kind === 'order' ? {action:'deleteOrder',id:item.item_id} : item.kind === 'article' ? {action:'deleteArticle',id:item.item_id} :
+      {action:'deleteItem',kind:item.kind,id:item.item_id},null,null,() => 'Ha tornat a la Paperera.'));
+}
+function purgeTrashNow(item) {
+  const name = trashName(item);
+  return saveWithUndo({action:'purgeTrash',ids:[item.id]},null,null,'S’ha esborrat definitivament «'+name+'».',
+    () => save({action:'unpurgeTrash',ids:[item.id]},null,null,() => '«'+name+'» torna a ser a la Paperera.'));
+}
+function trashView() {
+  const items = data.trash || [];
+  const me = data.me?.email ?? '';
+  const rows = items.map(item => {
+    const left = Math.max(0,Math.ceil((Date.parse(item.deleted_at)+trashDays*dayMs-Date.now())/dayMs));
+    const when = left <= 0 ? 's’esborrarà avui' : left === 1 ? 's’esborrarà demà' : 's’esborrarà d’aquí a '+left+' dies';
+    const kind = trashKinds[item.kind] || '';
+    const meta = [kind,item.detail,item.kind === 'order' && item.owner_email && item.owner_email !== me ? 'feta per '+authorName(item.owner_email) : '',
+      'eliminat el '+new Date(item.deleted_at).toLocaleDateString('ca-ES',{dateStyle:'medium',timeZone:'Europe/Madrid'}),when].filter(Boolean).join(' · ');
+    const name = trashName(item);
+    return swipeOpen('trash:'+item.id,true,true,'restore')+'<div class="trash-row swipe-row" title="'+escape(name+' · '+meta)+'"><strong>'+escape(name)+'</strong>'+
+      '<span class="meta">'+escape(meta)+'</span></div></div>';
+  }).join('');
+  return '<article class="card main-card"><h2>Paperera</h2><p class="meta">Llisca un element cap a la dreta per recuperar-lo o cap a l’esquerra per esborrar-lo definitivament. Passats '+trashDays+' dies, s’esborren sols.</p>'+
+    '<div class="trash-list">'+(rows || empty('La paperera és buida.'))+'</div></article>';
+}
+async function swipeAction(key, dir) {
+  const split = key.indexOf(':');
+  const kind = key.slice(0,split);
+  const id = key.slice(split+1);
+  if (busy) return false;
+  if (kind === 'article') {
+    const article = byId('articles',id);
+    return article ? (dir === 'left' ? deleteArticleNow(article) : archiveArticleNow(article)) : false;
+  }
+  if (kind === 'order') return deleteOrderNow(id);
+  if (itemLabels[kind]) return deleteItemNow(kind,id);
+  if (kind === 'trash') {
+    const item = (data.trash || []).find(entry => entry.id === id);
+    return item ? (dir === 'right' ? restoreTrashNow(item) : purgeTrashNow(item)) : false;
+  }
+  return false;
+}
+(function setupSwipe() {
+  const icons = {left:trashIcon,archive:archiveIcon,restore:restoreIcon};
+  let touch = null;
+  let wheel = null;
+  let quietUntil = 0;
+  let blockClick = 0;
+  function backgroundOf(element) {
+    for (let node = element; node && node !== document.documentElement; node = node.parentElement) {
+      const color = getComputedStyle(node).backgroundColor;
+      if (color && color !== 'transparent' && color !== 'rgba(0, 0, 0, 0)') return color;
+    }
+    return getComputedStyle(document.body).backgroundColor;
+  }
+  function begin(wrap) {
+    const row = wrap.querySelector('.swipe-row');
+    row.style.background = backgroundOf(wrap.parentElement);
+    row.style.transition = 'none';
+    return {wrap,row,dx:0,width:wrap.offsetWidth || 1};
+  }
+  function move(state, dx) {
+    if (dx < 0 && !state.wrap.dataset.left) dx = 0;
+    if (dx > 0 && !state.wrap.dataset.right) dx = 0;
+    state.dx = dx;
+    state.row.style.transform = dx ? 'translateX('+dx+'px)' : '';
+    state.wrap.classList.toggle('left',dx < 0);
+    state.wrap.classList.toggle('right',dx > 0);
+    const icon = dx < 0 ? icons.left : dx > 0 ? icons[state.wrap.dataset.rightIcon] || icons.archive : '';
+    const bg = state.wrap.firstElementChild;
+    if (bg.dataset.icon !== String(dx < 0 ? 'l' : dx > 0 ? 'r' : '')) { bg.dataset.icon = dx < 0 ? 'l' : dx > 0 ? 'r' : ''; bg.innerHTML = icon; }
+  }
+  function reset(state) {
+    state.row.style.transition = 'transform .2s';
+    state.row.style.transform = '';
+    setTimeout(() => { state.wrap.classList.remove('left','right'); state.row.style.background = ''; state.row.style.transition = ''; },200);
+  }
+  function end(state) {
+    quietUntil = Date.now()+400;
+    const dir = state.dx <= -state.width/2 ? 'left' : state.dx >= state.width/2 ? 'right' : '';
+    if (!dir) { reset(state); return; }
+    state.row.style.transition = 'transform .18s';
+    state.row.style.transform = 'translateX('+(dir === 'left' ? -state.width : state.width)+'px)';
+    setTimeout(async () => {
+      let ok = false;
+      try { ok = await swipeAction(state.wrap.dataset.swipe,dir); } catch { ok = false; }
+      // Si no s'ha pogut fer (sense permís, en ús…), la fila torna al seu lloc; l'avís d'error n'explica el motiu.
+      if (!ok && state.wrap.isConnected) reset(state);
+    },180);
+  }
+  // Dit o ratolí: arrossegar la fila.
+  document.addEventListener('pointerdown',event => {
+    if (event.button > 0) return;
+    const wrap = event.target.closest('.swipe');
+    if (!wrap || event.target.closest('input,select,textarea,[data-category-drag]')) return;
+    touch = {wrap,x:event.clientX,y:event.clientY,id:event.pointerId,state:null};
+  });
+  document.addEventListener('pointermove',event => {
+    if (!touch || event.pointerId !== touch.id) return;
+    const dx = event.clientX-touch.x;
+    const dy = event.clientY-touch.y;
+    if (!touch.state) {
+      if (Math.abs(dx) < 8 && Math.abs(dy) < 8) return;
+      if (Math.abs(dy) >= Math.abs(dx) || busy) { touch = null; return; }
+      touch.state = begin(touch.wrap);
+      try { touch.wrap.setPointerCapture(event.pointerId); } catch { /* sense captura */ }
+    }
+    event.preventDefault();
+    move(touch.state,dx);
+  },{passive:false});
+  function release(event) {
+    if (!touch || event.pointerId !== touch.id) return;
+    const state = touch.state;
+    touch = null;
+    if (!state) return;
+    blockClick = Date.now();
+    if (event.type === 'pointercancel') reset(state); else end(state);
+  }
+  document.addEventListener('pointerup',release);
+  document.addEventListener('pointercancel',release);
+  // Després d'arrossegar, no s'obre ni es marca la fila.
+  document.addEventListener('click',event => {
+    if (Date.now()-blockClick < 400 && event.target.closest('.swipe')) { event.preventDefault(); event.stopImmediatePropagation(); }
+  },true);
+  // Trackpad: lliscar amb dos dits.
+  document.addEventListener('wheel',event => {
+    const wrap = event.target.closest('.swipe');
+    if (!wheel) {
+      if (!wrap || busy || Date.now() < quietUntil || Math.abs(event.deltaX) <= Math.abs(event.deltaY)) return;
+      wheel = {wrap,state:begin(wrap),dx:0};
+    } else if (wheel.wrap !== wrap && !wheel.wrap.contains(event.target)) return;
+    event.preventDefault();
+    wheel.dx -= event.deltaX;
+    move(wheel.state,wheel.dx);
+    clearTimeout(wheel.timer);
+    wheel.timer = setTimeout(() => { const state = wheel.state; wheel = null; end(state); },120);
+  },{passive:false});
+})();
 
 // Dia de la comanda a Barcelona (AAAA-MM-DD) i com es mostra.
 function orderDayKey(date) {
@@ -2304,16 +2551,16 @@ function purchasesView() {
   const lines = Map.groupBy(data.purchaseLines || [],line => line.purchase_id);
   const stockLabel = {pending:'Pendent a GestoStock', done:'Partida creada', discarded:'Descartada a GestoStock'};
   return '<article class="card main-card"><h2>Albarans</h2>'+invoiceCard()+
-    (invoiceReview ? '' : '<section class="card"><h3>Albarans desats</h3>'+((data.purchases || []).map(purchase => {
+    (invoiceReview ? '' : '<section class="card"><h3>Albarans desats</h3>'+((data.purchases || []).length ? '<p class="meta">Llisca un albarà cap a l’esquerra per eliminar-lo.</p>' : '')+((data.purchases || []).map(purchase => {
       const items = lines.get(purchase.id) || [];
       const total = items.reduce((sum,line) => sum+(line.total ?? 0),0);
-      return '<div class="item"><button type="button" class="purchase-head" data-purchase="'+escape(purchase.id)+'" aria-expanded="'+(openPurchase === purchase.id)+'">'+
+      return swipeOpen('purchase:'+purchase.id,true,false)+'<div class="item swipe-row"><button type="button" class="purchase-head" data-purchase="'+escape(purchase.id)+'" aria-expanded="'+(openPurchase === purchase.id)+'">'+
         '<strong>'+escape(dayOf(purchase.date))+' · '+escape(purchase.supplier_name)+'</strong>'+
         '<span class="meta">'+(purchase.invoice_number ? 'Albarà '+escape(purchase.invoice_number)+' · ' : '')+items.length+(items.length === 1 ? ' línia' : ' línies')+(total ? ' · '+moneyFormat.format(total) : '')+'</span></button>'+
         (openPurchase === purchase.id ? items.map(line => '<div class="item"><strong>'+escape(byId('articles',line.article_id)?.name || line.name)+'</strong>'+
           '<div class="meta">'+[escape(line.name), line.quantity !== null ? quantityFormat.format(line.quantity)+' '+escape(line.unit) : '',
             line.unit_price !== null ? moneyFormat.format(line.unit_price) : '', line.total !== null ? moneyFormat.format(line.total) : '',
-            stockLabel[line.stock_status] || ''].filter(Boolean).join(' · ')+'</div></div>').join('') : '')+'</div>';
+            stockLabel[line.stock_status] || ''].filter(Boolean).join(' · ')+'</div></div>').join('') : '')+'</div></div>';
     }).join('') || '<p class="meta">Encara no s’ha desat cap albarà.</p>')+'</section>')+'</article>';
 }
 
@@ -2343,7 +2590,9 @@ document.addEventListener('input',event => {
 function render() {
   menuButton.hidden = false;
   // Només es mostren les opcions del menú que l'usuari té permeses a GestoAdmin.
-  const allowed = Object.keys(sections).filter(key => !data?.permissions || data.permissions[key]);
+  // La Paperera, a qui té alguna altra opció (hi veu el que pot veure a l'app).
+  const allowed = Object.keys(sections).filter(key => !data?.permissions ||
+    (key === 'trash' ? Object.keys(sections).some(item => item !== 'trash' && data.permissions[item]) : data.permissions[key]));
   if (!allowed.length) {
     tabs.innerHTML = '';
     content.innerHTML = '<section class="card main-card"><h2>Sense opcions</h2><p class="meta">Encara no tens cap opció de GestoCatalog. Demana a l’administrador que te’n doni.</p></section>';
@@ -2352,7 +2601,7 @@ function render() {
   if (!allowed.includes(section)) section = allowed[0];
   tabs.innerHTML = Object.entries(sections).filter(([key]) => allowed.includes(key)).map(([key,label]) => '<button data-tab="'+key+'" '+(section === key ? 'aria-current="page"' : '')+'>'+label+'</button>').join('');
   if (invoiceReview && section === 'purchases') syncInvoiceReview(document.querySelector('#purchase-review'));
-  content.innerHTML = section === 'order' ? order() : section === 'articles' ? articlesView() : section === 'history' ? history() : section === 'purchases' ? purchasesView() :
+  content.innerHTML = section === 'order' ? order() : section === 'articles' ? articlesView() : section === 'history' ? history() : section === 'purchases' ? purchasesView() : section === 'trash' ? trashView() :
     '<section class="card main-card"><h2>'+sections[section]+'</h2>'+catalog()+'</section>';
   refreshArticleSheet();
 }
@@ -2361,7 +2610,11 @@ document.addEventListener('click',async event => {
   const button = event.target.closest('button');
   if (!button || button.id === 'theme' || !data || busy) return;
   const target = button.dataset;
-  if (target.tab) {
+  if (Object.hasOwn(target,'undo')) {
+    const undo = undoAction;
+    notify('');
+    if (undo) await undo();
+  } else if (target.tab) {
     if (tabs.contains(button)) {
       setMenu(false);
       menuButton.focus();
@@ -2427,18 +2680,15 @@ document.addEventListener('click',async event => {
   } else if (button.id === 'clear-bulk-log') {
     bulkLog.length = 0;
     document.querySelector('#article-merge-controls').innerHTML = articleMergeControls();
+  } else if (target.deleteItem) {
+    const split = target.deleteItem.indexOf(':');
+    await deleteItemNow(target.deleteItem.slice(0,split),target.deleteItem.slice(split+1),button);
   } else if (target.archiveArticle || target.deleteArticle) {
+    // Botons Arxiva i Elimina de la fitxa: sense confirmació i amb Desfés (ESTIL.md).
     const article = byId('articles',target.archiveArticle || target.deleteArticle);
     if (!article) return;
-    if (target.deleteArticle && !window.confirm('Vols eliminar «'+article.name+'» del catàleg?')) return;
-    await save({action:target.deleteArticle ? 'deleteArticle' : 'archiveArticle',id:article.id,archived:!article.archived},() => {
-      if (edit === article.id) edit = '';
-      if (addingArticle === article.id) addingArticle = '';
-      if (target.deleteArticle) {
-        mergeSelection.delete(article.id);
-        if (sheetId === article.id) { sheetId = ''; document.querySelector('#order-dialog')?.close(); }
-      }
-    },button,() => target.deleteArticle ? 'Article eliminat.' : article.archived ? 'Article restaurat.' : 'Article arxivat.');
+    if (target.deleteArticle) await deleteArticleNow(article,button);
+    else await archiveArticleNow(article,button);
   } else if (target.edit || Object.hasOwn(target,'cancel')) {
     edit = target.edit || '';
     render();
@@ -2491,18 +2741,18 @@ document.addEventListener('click',async event => {
   } else if (target.bulk) {
     const selected = data.articles.filter(article => mergeSelection.has(article.id));
     if (!selected.length) return;
+    // Sense confirmació i amb Desfés. Els que es fan servir no s'eliminen (l'avís diu quins).
     if (target.bulk === 'delete') {
-      if (!window.confirm('Vols eliminar '+selected.length+(selected.length === 1 ? ' article' : ' articles')+' del catàleg? Els que es facin servir en comandes, albarans o a GestoStock no s’eliminaran.')) return;
       await runBulk(selected.map(article => [article.name,{action:'deleteArticle',id:article.id}]),button,done => {
         mergeSelection.clear();
         return done+(done === 1 ? ' article eliminat.' : ' articles eliminats.');
-      });
+      },results => save({action:'restoreTrash',ids:results.map(result => result.trash)},null,null,saved => 'S’han recuperat '+saved.count+(saved.count === 1 ? ' article.' : ' articles.')));
     } else {
       const archived = !archivedArticles;
       await runBulk(selected.map(article => [article.name,{action:'archiveArticle',id:article.id,archived}]),button,done => {
         mergeSelection.clear();
         return done+(done === 1 ? ' article ' : ' articles ')+(archived ? 'arxivats.' : 'restaurats.');
-      });
+      },(results,payloads) => runBulk(payloads.map(([name,payload]) => [name,{...payload,archived:!archived}]),null,done => 'S’ha desfet el canvi de '+done+(done === 1 ? ' article.' : ' articles.')));
     }
   } else if (target.articleSheet) {
     openOrderEditor(byId('articles',target.articleSheet),'',Object.hasOwn(target,'fromTools'));
@@ -2584,17 +2834,6 @@ document.addEventListener('click',async event => {
       orderSupplier = '';
       section = 'order';
     },button,() => 'Comanda recuperada: ja la pots editar a «Nova comanda».');
-  } else if (target.deleteOrder) {
-    const id = target.deleteOrder;
-    const lines = data.lines.filter(line => line.order_id === id);
-    if (!lines.length) return;
-    const sent = new Set(lines.map(line => line.supplier_id).filter(supplier => sentInfo(id,supplier))).size;
-    const question = 'Vols eliminar la comanda del '+dateFormat.format(new Date(lines[0].created_at))+'?'+
-      (sent ? ' Ja n’has enviat '+(sent === 1 ? '1 missatge' : sent+' missatges')+'.' : '')+' No es podrà recuperar.';
-    if (!window.confirm(question)) return;
-    await save({action:'deleteOrder',id},() => {
-      if (openOrder === id) openOrder = '';
-    },button,() => 'Comanda eliminada.');
   } else if (target.order) {
     openOrder = openOrder === target.order ? '' : target.order;
     render();
@@ -2697,7 +2936,7 @@ let categoryDrag = null;
 document.addEventListener('pointerdown',event => {
   const handle = event.target.closest?.('[data-category-drag]');
   if (!handle || (event.pointerType === 'mouse' && event.button !== 0)) return;
-  const row = handle.closest('.catalog-row');
+  const row = handle.closest('.swipe') || handle.closest('.catalog-row');
   event.preventDefault();
   handle.setPointerCapture(event.pointerId);
   const top = row.getBoundingClientRect().top;
