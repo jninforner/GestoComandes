@@ -5,8 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="referrer" content="no-referrer">
 <title>GestoCatalog</title>
-<link rel="icon" type="image/png" href="./icon.png?v=1.24.1">
-<link rel="apple-touch-icon" sizes="180x180" href="./icon.png?v=1.24.1">
+<link rel="icon" type="image/png" href="./icon.png?v=1.24.2">
+<link rel="apple-touch-icon" sizes="180x180" href="./icon.png?v=1.24.2">
 <style>:root{color-scheme:light;--bg:#f7f8fd;--tx:#28377e;--mu:#566598;--ln:#303f91;--surface:#fff;--soft:#f0f2fc;--border:#d4daf1;--field:#b6bfdf;--on:#fff;--red:#b42318;--green:#17734a}
 :root[data-theme=dark]{color-scheme:dark;--bg:#10152c;--tx:#e5e9ff;--mu:#adb8e5;--ln:#a1afff;--surface:#1b2447;--soft:#232f59;--border:#425080;--field:#6371a0;--on:#10152c;--red:#ff9992;--green:#84dbab}
 *{box-sizing:border-box}
@@ -273,7 +273,7 @@ details.order-category[open]>summary{border-radius:11px 11px 0 0}
 <body>
 <main>
 <header class="topbar">
-  <div class="brand"><h1>GestoCatalog</h1><div class="meta version">Versió 1.24.1<span id="sync-state" role="status"></span></div></div>
+  <div class="brand"><h1>GestoCatalog</h1><div class="meta version">Versió 1.24.2<span id="sync-state" role="status"></span></div></div>
   <div class="top-actions">
     <div class="menu-anchor">
       <button id="menu-toggle" type="button" aria-label="Menú" aria-expanded="false" aria-controls="menu-panel" hidden><span aria-hidden="true">☰</span><span class="top-action-label" aria-hidden="true">Menú</span></button>
@@ -1460,9 +1460,11 @@ function orderListRow(article,line,index) {
 
 // Fitxa de l'article (llapis): línia de la comanda, dades de l'article i proveïdors, tot en un sol diàleg.
 let sheetId = '';
+let sheetAddToOrder = '';
 let sheetFromTools = false;
 function openOrderEditor(article, index, fromTools = false) {
   if (!article) return;
+  sheetAddToOrder = '';
   sheetFromTools = fromTools;
   sheetId = article.id;
   edit = article.id;
@@ -1504,7 +1506,7 @@ function articleSheet(article, index) {
       '<p class="error" data-editor-error role="alert" hidden></p>'+
       '<div class="actions"><button type="submit" class="primary">'+(line ? 'Desa la línia' : 'Afegeix a la comanda')+'</button>'+
 '</div></form>'
-    : '<p class="meta">Per demanar-lo, afegeix-li un proveïdor a sota.</p>';
+    : '<p class="meta">Per demanar-lo, tria-li un proveïdor a sota i desa la fitxa.</p>';
   return '<div class="sheet-head"><h2 id="order-dialog-title">'+name+'</h2><button type="button" id="close-order-dialog" aria-label="Tanca">✕</button></div>'+
     (sheetFromTools ? '' : '<section class="sheet-part"><h3>A la comanda</h3>'+orderPart+'</section>')+
     '<section class="sheet-part"><h3>Fitxa de l’article</h3><form id="article-sheet"><div class="grid">'+
@@ -1515,11 +1517,13 @@ function articleSheet(article, index) {
     '<section class="sheet-part"><h3>Proveïdors</h3>'+
       offers.map(offer => '<div class="row item"><span>'+escape(byId('suppliers',offer.supplier_id)?.name)+' · '+escape(byId('units',offer.unit_id)?.name)+'</span>'+
         '<button type="button" class="remove" data-unlink="'+escape(offer.supplier_id)+'">Desvincula</button></div>').join('')+
-      (data.suppliers.length ? '<form id="offer" class="sheet-offer"><div class="grid"><label>Proveïdor<select required name="supplier">'+options(data.suppliers,'','Tria un proveïdor')+'</select></label>'+
-        '<label>Unitat de compra<select required name="unit">'+options(data.units.filter(unit => unit.id !== pendingUnit),article.unit_id,'Tria una unitat')+'</select></label></div>'+
-        '<button>Afegeix el proveïdor</button></form>' : '<p class="meta">Encara no hi ha proveïdors. Crea’n un a Menú → Proveïdors.</p>')+
+      // El proveïdor triat aquí es desa amb el botó «Desa la fitxa».
+      (data.suppliers.length ? '<div class="grid sheet-offer"><label>'+(offers.length ? 'Afegeix un proveïdor' : 'Proveïdor')+'<select form="article-sheet" name="offerSupplier">'+
+        options(data.suppliers.filter(supplier => !offers.some(offer => offer.supplier_id === supplier.id)),'','Tria un proveïdor')+'</select></label>'+
+        '<label>Unitat de compra del proveïdor<select form="article-sheet" name="offerUnit">'+options(data.units.filter(unit => unit.id !== pendingUnit),article.unit_id,'Tria una unitat')+'</select></label></div>' : '<p class="meta">Encara no hi ha proveïdors. Crea’n un a Menú → Proveïdors.</p>')+
     '</section>'+
     '<section class="sheet-part"><h3>Últimes compres</h3>'+articlePurchases(article.id)+'</section>'+
+    '<p class="error" id="sheet-error" role="alert" hidden></p>'+
     '<div class="actions sheet-foot"><button class="primary" form="article-sheet">Desa la fitxa</button><button type="button" data-archive-article="'+id+'">'+(article.archived ? 'Restaura' : 'Arxiva')+'</button>'+
       (used ? '' : '<button type="button" class="remove" data-delete-article="'+id+'">Elimina</button>')+'</div>';
 }
@@ -1572,7 +1576,9 @@ async function pickOrderArticle(id, button) {
   if (!article) return;
   const {supplier,unit} = orderDefaults(article);
   if (!supplier || !unit) {
+    // Li falta proveïdor o unitat: s'obre la fitxa i, en desar-la, s'afegeix a la comanda.
     openOrderEditor(article,'');
+    sheetAddToOrder = article.id;
     return;
   }
   await addDraftLine({article:id,supplier,unit,quantity:1},button);
@@ -2349,11 +2355,36 @@ document.addEventListener('submit',async event => {
       form.closest('dialog')?.close();
     },event.submitter);
   } else if (form.id === 'article-sheet') {
-    // En desar la fitxa, el diàleg d'edició es tanca.
-    await save({...values,action:'articles',id:sheetId},() => {
+    // En desar la fitxa es desa també el proveïdor triat, i el diàleg d'edició es tanca.
+    const id = sheetId;
+    const addToOrder = sheetAddToOrder === id;
+    const error = document.querySelector('#sheet-error');
+    const showError = message => { error.textContent = message; error.hidden = false; };
+    const {offerSupplier,offerUnit,...article} = values;
+    if (offerSupplier && !offerUnit) { showError('Tria la unitat de compra del proveïdor.'); return; }
+    if (busy) return;
+    if (offerSupplier) {
+      try {
+        await api({action:'offer',article:id,supplier:offerSupplier,unit:offerUnit});
+      } catch (failure) {
+        showError('No s’ha pogut desar el proveïdor. '+(failure.message || ''));
+        return;
+      }
+    }
+    // Si l'article no té unitat, es fa servir la del proveïdor.
+    if (!article.unit && offerUnit) article.unit = offerUnit;
+    await save({...article,action:'articles',id},() => {
       sheetId = '';
+      sheetAddToOrder = '';
       form.closest('dialog')?.close();
     },event.submitter,()=>'Fitxa desada.');
+    if (addToOrder && !sheetId && byId('articles',id)) {
+      const {supplier,unit} = orderDefaults(byId('articles',id));
+      if (supplier && unit) {
+        await pickOrderArticle(id);
+        focusOrderArticle(id);
+      }
+    }
   } else if (form.id === 'offer') {
     await save({...values,action:'offer',article:edit},null,event.submitter);
   } else if (form.id === 'quick-article') {
