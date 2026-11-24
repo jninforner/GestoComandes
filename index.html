@@ -5,8 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="referrer" content="no-referrer">
 <title>GestoCatalog</title>
-<link rel="icon" type="image/png" href="./icon.png?v=1.24.4">
-<link rel="apple-touch-icon" sizes="180x180" href="./icon.png?v=1.24.4">
+<link rel="icon" type="image/png" href="./icon.png?v=1.25.0">
+<link rel="apple-touch-icon" sizes="180x180" href="./icon.png?v=1.25.0">
 <style>:root{color-scheme:light;--bg:#f7f8fd;--tx:#28377e;--mu:#566598;--ln:#303f91;--surface:#fff;--soft:#f0f2fc;--border:#d4daf1;--field:#b6bfdf;--on:#fff;--red:#b42318;--green:#17734a}
 :root[data-theme=dark]{color-scheme:dark;--bg:#10152c;--tx:#e5e9ff;--mu:#adb8e5;--ln:#a1afff;--surface:#1b2447;--soft:#232f59;--border:#425080;--field:#6371a0;--on:#10152c;--red:#ff9992;--green:#84dbab}
 *{box-sizing:border-box}
@@ -148,10 +148,11 @@ img,video,canvas{max-width:100%;height:auto}
 #order-dialog .order-editor{padding:0}
 
 .order-lines .order-lookup{margin:14px 0 0}
-#order-add-search{display:flex;gap:8px;align-items:end}
-#order-add-search label{flex:1 1 auto;min-width:0}
-#order-search-submit[hidden]{display:none}
-#order-add-search button{min-height:46px}
+/* Cerca comuna de Nova comanda i Articles */
+.article-lookup{display:flex;gap:8px;align-items:end}
+.article-lookup label{flex:1 1 auto;min-width:0}
+.article-lookup button[hidden]{display:none}
+.article-lookup button{min-height:46px}
 
 .catalog-management{margin-bottom:10px}
 .article-merge-choice{display:flex;align-items:center;gap:5px;min-height:44px}
@@ -171,9 +172,9 @@ img,video,canvas{max-width:100%;height:auto}
   .order-list-filters select{height:40px;min-height:40px;padding:4px 6px;text-overflow:ellipsis}
   #order-visibility{grid-column:1/-1;justify-self:start;min-height:40px;padding-block:4px;font-size:14px}
   .order-lines .order-lookup{margin-top:6px}
-  #order-add-search{gap:6px}
-  #order-add-search label{gap:2px;font-size:12px}
-  #order-add-search input,#order-add-search button{min-height:42px;padding-block:4px}
+  .article-lookup{gap:6px}
+  .article-lookup label{gap:2px;font-size:12px}
+  .article-lookup input,.article-lookup button{min-height:42px;padding-block:4px}
   .order-category{margin-top:8px}
 }
 .order-list-row{grid-template-columns:minmax(0,1fr) auto 44px}
@@ -225,10 +226,6 @@ img,video,canvas{max-width:100%;height:auto}
 .bulk-log details{margin-top:6px}
 .bulk-log summary{cursor:pointer}
 .bulk-log p{margin:4px 0 0 16px}
-#article-add-search{display:flex;gap:8px;align-items:end}
-#article-add-search label{flex:1 1 auto;min-width:0}
-#article-search-submit[hidden]{display:none}
-#article-add-search button{min-height:46px}
 #quick-article label.full{display:grid;margin-bottom:12px}
 #quick-article .grid{grid-template-columns:repeat(auto-fit,minmax(min(100%,160px),1fr))}
 .order-list-row.just-added{outline:3px solid var(--accent,#7b8cf0);outline-offset:2px;border-radius:10px;transition:outline-color .3s}
@@ -240,6 +237,11 @@ details.order-category>summary .group-name{flex:1 1 auto}
 details.order-category>summary .meta{font-weight:400;font-size:13px}
 details.order-category[open]>summary{border-radius:11px 11px 0 0}
 .group-tools{display:flex;justify-content:flex-end;margin-top:10px}
+/* Files de la pantalla Articles (mateixa fila que Nova comanda, per marcar) */
+.order-list-row.is-select strong{color:var(--tx)}
+.order-list-row.is-selected{background:var(--soft)}
+.is-selected .order-marker{background:var(--ln);color:var(--on);border-color:var(--ln)}
+.order-list-row.is-select{grid-template-columns:minmax(0,1fr) 44px}
 
 .worker-profiles .worker-profile-item{border-top:1px solid var(--border);padding:10px 0}
 .worker-profile-item>summary,.worker-profile-inactive>summary{cursor:pointer;min-height:34px;display:flex;align-items:center;justify-content:space-between;gap:12px}
@@ -274,7 +276,7 @@ details.order-category[open]>summary{border-radius:11px 11px 0 0}
 <body>
 <main>
 <header class="topbar">
-  <div class="brand"><h1>GestoCatalog</h1><div class="meta version">Versió 1.24.4<span id="sync-state" role="status"></span></div></div>
+  <div class="brand"><h1>GestoCatalog</h1><div class="meta version">Versió 1.25.0<span id="sync-state" role="status"></span></div></div>
   <div class="top-actions">
     <div class="menu-anchor">
       <button id="menu-toggle" type="button" aria-label="Menú" aria-expanded="false" aria-controls="menu-panel" hidden><span aria-hidden="true">☰</span><span class="top-action-label" aria-hidden="true">Menú</span></button>
@@ -994,7 +996,7 @@ function openNewArticleDialog(name, context) {
     document.querySelector('#workspace').append(dialog);
   }
   sheetId = '';
-  const category = context === 'order' ? (orderCategory === 'uncategorized' ? '' : orderCategory) : (categoryFilter === '-' ? '' : categoryFilter);
+  const category = context === 'order' ? (orderCategory === '-' ? '' : orderCategory) : (categoryFilter === '-' ? '' : categoryFilter);
   const supplier = context === 'order' ? orderSupplier : supplierFilter;
   dialog.innerHTML = '<div class="sheet-head"><h2 id="order-dialog-title">Nou article</h2><button type="button" id="close-order-dialog" aria-label="Tanca">✕</button></div>'+
     '<form id="quick-article" data-context="'+context+'"><label class="full">Nom<input name="name" required maxlength="120" value="'+escape(name)+'"></label><div class="grid">'+
@@ -1008,12 +1010,6 @@ function openNewArticleDialog(name, context) {
   const form = dialog.querySelector('#quick-article');
   const fields = ['name','category','supplier','unit'].map(key => form.elements[key]);
   (fields.find(field => !field.value.trim()) || fields[0]).focus();
-}
-
-// A Articles: si la cerca no troba l'article, s'ofereix crear-lo (com a Nova comanda).
-function canCreateSearchedArticle() {
-  const query = searchKey(articleSearch.trim());
-  return Boolean(query) && !data.articles.some(article => matchesArticleName(article,query,true));
 }
 
 // Llapis de proveïdors, unitats i categories: la fitxa s'edita en un diàleg, amb els botons a baix.
@@ -1043,20 +1039,15 @@ function catalog() {
   const isSupplier = section === 'suppliers';
   const title = {suppliers:'Nou proveïdor',articles:'Nou article',units:'Nova unitat',categories:'Nova categoria'}[section];
   const isArticle = section === 'articles';
-  const filters = isArticle ? '<div id="article-filters" class="grid">'+
-    '<label>Proveïdor<select id="supplier-filter">'+options(data.suppliers,supplierFilter,'Tots els proveïdors')+'</select></label>'+
-    '<label>Categoria<select id="category-filter">'+options(data.categories,categoryFilter,'Totes les categories')+'<option value="-" '+(categoryFilter === '-' ? 'selected' : '')+'>Sense categoria</option></select></label></div>'+
-    '<div class="order-lookup"><form id="article-add-search" class="article-lookup">'+
-    '<label>Cerca un article<input id="article-search" name="articleName" placeholder="Cerca pel nom" type="search" enterkeyhint="done" maxlength="120" autocomplete="off" value="'+escape(articleSearch)+'"></label>'+
-    '<button type="submit" id="article-search-submit" class="primary"'+(canCreateSearchedArticle() ? '' : ' hidden')+'>Crea l’article</button></form></div>' : '';
+  const filters = isArticle ? '<div id="article-filters" class="grid">'+listFilters('articles')+'</div>'+listLookup('articles') : '';
   return (isArticle ? '' : '<article class="card"><details class="catalog-new"><summary>'+escape(title)+'</summary><form id="catalog">'+catalogFields(current)+
     '<div class="actions"><button class="primary">Desa</button></div></form></details></article>')+
     (isArticle ? pdfImportCard() : '')+
     '<article class="card"><h2>'+{suppliers:'Proveïdors registrats',articles:'Articles registrats',units:'Unitats registrades',categories:'Categories registrades'}[section]+'</h2>'+filters+(isArticle ?
       '<div class="actions catalog-management"><button type="button" class="primary" data-new-article>+ Nou article</button><button type="button" id="article-archive-view" aria-pressed="'+archivedArticles+'">'+(archivedArticles ? 'Mostra els articles actius' : 'Mostra els arxivats')+'</button>'+
       '<button type="button" id="select-visible-articles">Marca tots els que es veuen</button>'+groupToggleButton('articles')+'</div>'+
-      '<div id="article-merge-controls">'+articleMergeControls()+'</div>' : '')+'<div id="catalog-rows">'+
-    catalogRows()+'</div></article>';
+      '<div id="article-merge-controls">'+articleMergeControls()+'</div><div id="list-articles">'+articleList('articles')+'</div>' :
+      '<div id="catalog-rows">'+catalogRows()+'</div>')+'</article>';
 }
 
 function pdfImportCard() {
@@ -1281,61 +1272,22 @@ async function runBulk(payloads, button, describe) {
   document.querySelector('#bulk-log')?.scrollIntoView({block:'nearest'});
 }
 
+// Llistat de proveïdors, unitats i categories (els articles fan servir la llista comuna, articleList).
 function catalogRows() {
-  const isArticle = section === 'articles';
   const isSupplier = section === 'suppliers';
-  const query = searchKey(articleSearch);
-  const added = isArticle ? draftArticleIds() : null;
-  const names = {suppliers:'proveïdor',articles:'article',units:'unitat',categories:'categoria'};
-  const rowHtml = item => {
-    const linked = isArticle ? data.offers.filter(offer => offer.article_id === item.id) : [];
-    if (isArticle && (Boolean(item.archived) !== archivedArticles || (categoryFilter && (item.category_id || '-') !== categoryFilter) ||
-        (supplierFilter && !linked.some(offer => offer.supplier_id === supplierFilter)) || ![item.name,item.shared_name].some(name => searchKey(name || '').includes(query)))) return '';
-    const detail = isSupplier ? [item.contact,item.phone ? '+'+item.phone : 'Tria el contacte a WhatsApp'].filter(Boolean).join(' · ') :
-      isArticle ? [byId('categories',item.category_id)?.name,byId('units',item.unit_id)?.name,
-        linked.map(offer => byId('suppliers',offer.supplier_id)?.name).filter(Boolean).join(' · ') || 'Sense proveïdors'].filter(Boolean).join(' · ') : '';
-    const order = '';
-    const inDraft = added?.has(item.id);
-    const articleActions = isArticle ?
-      '<button type="button" data-archive-article="'+escape(item.id)+'">'+(item.archived ? 'Restaura' : 'Arxiva')+'</button>'+
-      (inDraft || data.lines.some(line => line.article_id === item.id) ? '' :
-        '<button type="button" class="remove" data-delete-article="'+escape(item.id)+'">Elimina</button>') : '';
-    const select = isArticle ? '<label class="article-merge-choice"><input type="checkbox" data-merge-article="'+escape(item.id)+'"'+
-      (mergeSelection.has(item.id) ? ' checked' : '')+' aria-label="Selecciona '+escape(item.name)+' per fusionar"> Fusiona</label>' : '';
-    if (isArticle) {
-      const used = inDraft || data.lines.some(line => line.article_id === item.id);
-      const full = item.name+(detail ? ' · '+detail : '');
-      return '<div class="article-row'+(inDraft ? ' in-draft' : '')+'">'+
-        '<input type="checkbox" class="article-select" data-merge-article="'+escape(item.id)+'"'+(mergeSelection.has(item.id) ? ' checked' : '')+' aria-label="Selecciona '+escape(item.name)+'">'+
-        '<button type="button" class="article-open" data-article-sheet="'+escape(item.id)+'" data-from-tools title="'+escape(full)+'">'+
-        '<strong>'+escape(item.name)+'</strong>'+(detail ? '<span class="meta"> · '+escape(detail)+'</span>' : '')+'</button>'+
-        '<button type="button" class="icon-button" data-archive-article="'+escape(item.id)+'" title="'+(item.archived ? 'Restaura' : 'Arxiva')+'" aria-label="'+(item.archived ? 'Restaura ' : 'Arxiva ')+escape(item.name)+'">'+(item.archived ? restoreIcon : archiveIcon)+'</button>'+
-        '<button type="button" class="icon-button remove" data-delete-article="'+escape(item.id)+'"'+(used ? ' disabled title="No es pot eliminar: és en una comanda. El pots arxivar."' : ' title="Elimina"')+' aria-label="Elimina '+escape(item.name)+'">'+trashIcon+'</button></div>';
-    }
-    if (!isArticle) {
-      // Proveïdors i categories: prement el nom es mostren els seus articles. Unitats: només el nom.
-      const label = '<strong>'+escape(item.name)+'</strong>'+(detail ? '<span class="meta"> · '+escape(detail)+'</span>' : '');
-      const full = item.name+(detail ? ' · '+detail : '');
-      return '<div class="catalog-row">'+
-        (isSupplier || section === 'categories'
-          ? '<button type="button" class="article-open" data-browse-articles="'+escape(item.id)+'" title="Mostra els articles de '+escape(full)+'">'+label+'</button>'
-          : '<span class="catalog-name" title="'+escape(full)+'">'+label+'</span>')+
-        '<button type="button" class="icon-button" data-catalog-edit="'+escape(item.id)+'" title="Edita" aria-haspopup="dialog" aria-label="Edita '+escape(item.name)+'">'+pencilIcon+'</button></div>';
-    }
-    return '<div class="item'+(inDraft ? ' in-draft' : '')+'"><div class="row"><div><strong>'+escape(item.name)+'</strong>'+
-      (inDraft ? draftBadge : '')+(detail ? '<div class="meta">'+escape(detail)+'</div>' : '')+'</div><div class="actions">'+order+
-      (isArticle ? '<button type="button" data-article-sheet="'+escape(item.id)+'">Fitxa</button>' :
-        '<button type="button" class="icon-button" data-catalog-edit="'+escape(item.id)+'" title="Edita" aria-haspopup="dialog" aria-label="Edita '+escape(item.name)+'">'+pencilIcon+'</button>')+articleActions+select+'</div></div>'+
-      (isArticle && addingArticle === item.id ? catalogLine(item,linked) : '')+'</div>';
-  };
-  const rows = data[section].filter(item => item.id !== pendingUnit).map(item => [item,rowHtml(item)]).filter(([,html]) => html);
-  if (!rows.length) return empty('Cap '+names[section]+' per mostrar.');
-  if (!isArticle) return rows.map(([,html]) => html).join('');
-  // Amb una cerca o un filtre de categoria, els grups es mostren oberts.
-  const forceOpen = Boolean(articleSearch.trim() || categoryFilter);
-  const groups = Map.groupBy(rows,([item]) => item.category_id || '');
-  return [...groups].sort(([a],[b]) => categoryName(a).localeCompare(categoryName(b),'ca')).map(([category,items]) =>
-    categoryGroup('articles',category,items.length+(items.length === 1 ? ' article' : ' articles'),items.map(([,html]) => html).join(''),forceOpen)).join('');
+  const names = {suppliers:'proveïdor',units:'unitat',categories:'categoria'};
+  const rows = data[section].filter(item => item.id !== pendingUnit).map(item => {
+    const detail = isSupplier ? [item.contact,item.phone ? '+'+item.phone : 'Tria el contacte a WhatsApp'].filter(Boolean).join(' · ') : '';
+    // Proveïdors i categories: prement el nom es mostren els seus articles. Unitats: només el nom.
+    const label = '<strong>'+escape(item.name)+'</strong>'+(detail ? '<span class="meta"> · '+escape(detail)+'</span>' : '');
+    const full = item.name+(detail ? ' · '+detail : '');
+    return '<div class="catalog-row">'+
+      (isSupplier || section === 'categories'
+        ? '<button type="button" class="article-open" data-browse-articles="'+escape(item.id)+'" title="Mostra els articles de '+escape(full)+'">'+label+'</button>'
+        : '<span class="catalog-name" title="'+escape(full)+'">'+label+'</span>')+
+      '<button type="button" class="icon-button" data-catalog-edit="'+escape(item.id)+'" title="Edita" aria-haspopup="dialog" aria-label="Edita '+escape(item.name)+'">'+pencilIcon+'</button></div>';
+  });
+  return rows.join('') || empty('Cap '+names[section]+' per mostrar.');
 }
 
 // Grups per categoria que es poden replegar. L'estat (replegat o no) es recorda en aquest navegador.
@@ -1375,8 +1327,7 @@ document.addEventListener('toggle',event => {
 },true);
 
 function refreshGroups(scope) {
-  if (scope === 'order') document.querySelector('#order-groups').innerHTML = orderGroups(data.draft.lines);
-  else refreshCatalogRows();
+  refreshList(scope);
   const button = document.querySelector('[data-toggle-groups="'+scope+'"]');
   if (button) button.textContent = collapsedGroups[scope].size ? 'Desplega-ho tot' : 'Replega-ho tot';
 }
@@ -1405,59 +1356,113 @@ function offerEditor(article) {
     linked.map(offer => '<div class="row item"><span>'+escape(byId('suppliers',offer.supplier_id)?.name)+' · '+escape(byId('units',offer.unit_id)?.name)+'</span><button class="remove" data-unlink="'+escape(offer.supplier_id)+'">Desvincula</button></div>').join('')+'</article>';
 }
 
+// ===== Llista d'articles comuna a Nova comanda ('order') i Articles ('articles') =====
+// Mateixos filtres, mateixa cerca («Cerca o crea un article»), mateixos grups per categoria i mateixes files.
+// A Nova comanda, prémer una fila l'afegeix a la comanda; a Articles, la marca per a les accions de diversos articles.
+const listState = {
+  order:{get search() { return orderSearch; }, set search(value) { orderSearch = value; },
+    get category() { return orderCategory; }, set category(value) { orderCategory = value; },
+    get supplier() { return orderSupplier; }, set supplier(value) { orderSupplier = value; }},
+  articles:{get search() { return articleSearch; }, set search(value) { articleSearch = value; },
+    get category() { return categoryFilter; }, set category(value) { categoryFilter = value; },
+    get supplier() { return supplierFilter; }, set supplier(value) { supplierFilter = value; }}
+};
+const byName = (a,b) => a.name.localeCompare(b.name,'ca',{sensitivity:'base'});
+
+function listFilters(mode) {
+  const state = listState[mode];
+  return '<label>Categoria<select data-list-filter="category" data-list="'+mode+'">'+options([...data.categories].sort(byName),state.category,'Totes')+
+      '<option value="-"'+(state.category === '-' ? ' selected' : '')+'>Sense categoria</option></select></label>'+
+    '<label>Proveïdor<select data-list-filter="supplier" data-list="'+mode+'">'+options([...data.suppliers].sort(byName),state.supplier,'Tots')+'</select></label>';
+}
+
+function listLookup(mode) {
+  return '<div class="order-lookup"><form class="article-lookup" data-list-lookup="'+mode+'">'+
+    '<label>Cerca o crea un article<input id="'+mode+'-search" data-list-search="'+mode+'" name="articleName" placeholder="Cerca pel nom" type="search" enterkeyhint="done" maxlength="120" autocomplete="off" value="'+escape(listState[mode].search)+'"></label>'+
+    '<button type="submit" class="primary" data-list-create="'+mode+'"'+(canCreateSearched(mode) ? '' : ' hidden')+'>Crea l’article</button></form></div>';
+}
+
+// El botó «Crea l'article» només surt quan el nom buscat no existeix.
+function canCreateSearched(mode) {
+  const query = searchKey(listState[mode].search);
+  return Boolean(query) && !data.articles.some(article => matchesArticleName(article,query,true));
+}
+
+function articleList(mode) {
+  const state = listState[mode];
+  const query = searchKey(state.search);
+  const draft = data.draft.lines;
+  const byArticle = Map.groupBy(draft.filter(line => !orderSupplier || line.supplier === orderSupplier),line => line.article);
+  const withSupplier = new Set(state.supplier ? data.offers.filter(offer => offer.supplier_id === state.supplier).map(offer => offer.article_id) : []);
+  const articles = data.articles.filter(article => {
+    const ordered = mode === 'order' && byArticle.has(article.id);
+    if (mode === 'order' ? article.archived && !ordered : Boolean(article.archived) !== archivedArticles) return false;
+    if (state.category && (article.category_id || '-') !== state.category) return false;
+    if (state.supplier && !withSupplier.has(article.id) && !ordered) return false;
+    if (query) return matchesArticleName(article,query);
+    return !(mode === 'order' && onlyOrdered && !ordered);
+  });
+  const groups = Map.groupBy(articles,article => article.category_id || '');
+  const html = [...groups].sort(([a],[b]) => categoryName(a).localeCompare(categoryName(b),'ca')).map(([category,items]) => {
+    items.sort(byName);
+    const marked = items.filter(article => mode === 'order' ? byArticle.has(article.id) : mergeSelection.has(article.id)).length;
+    const rows = items.map(article => {
+      if (mode === 'articles') return selectListRow(article);
+      const lines = byArticle.get(article.id);
+      return lines ? lines.map(line => orderListRow(article,line,draft.indexOf(line))).join('') : orderListRow(article);
+    }).join('');
+    return categoryGroup(mode,category,items.length+(items.length === 1 ? ' article' : ' articles')+(marked ? ' · ✓ '+marked : ''),rows,Boolean(query || state.category));
+  }).join('');
+  if (html) return html;
+  if (query) return empty('Cap article coincideix amb «'+escape(state.search.trim())+'».'+(canCreateSearched(mode) ? ' Prem «Crea l’article» per crear-lo.' : ''));
+  if (state.category || state.supplier) return empty('No hi ha articles que coincideixin amb els filtres.');
+  if (mode === 'order' && onlyOrdered) return empty('Encara no hi ha cap article a la comanda.');
+  if (mode === 'articles' && archivedArticles) return empty('No hi ha articles arxivats.');
+  return empty(!request && !data.articles.length ? 'El catàleg de prova és buit. Escriu un nom a «Cerca o crea un article» per crear-ne un.' : 'El catàleg és buit.');
+}
+
+// Fila de la pantalla Articles: igual que la de Nova comanda, però prémer-la la marca (casella) i el llapis obre la fitxa.
+function selectListRow(article) {
+  const name = escape(article.name);
+  const id = escape(article.id);
+  const selected = mergeSelection.has(article.id);
+  const suppliers = data.offers.filter(offer => offer.article_id === article.id).map(offer => byId('suppliers',offer.supplier_id)?.name).filter(Boolean);
+  const detail = [byId('units',article.unit_id)?.name,suppliers.join(' · ') || 'Sense proveïdor'].filter(Boolean).join(' · ');
+  return '<div class="order-list-row is-select'+(selected ? ' is-selected' : '')+'">'+
+    '<button type="button" class="order-toggle" data-select-article="'+id+'" aria-pressed="'+selected+'" title="'+escape(article.name+' · '+detail)+'">'+
+    '<span class="order-marker" aria-hidden="true">'+(selected ? '✓' : '')+'</span><span class="order-item-copy">'+
+    '<strong>'+name+'</strong><span class="meta">'+escape(detail)+'</span></span></button>'+
+    '<button type="button" class="order-pencil" data-article-sheet="'+id+'" data-from-tools aria-haspopup="dialog" aria-label="Fitxa de '+name+'"><span aria-hidden="true">✎</span></button></div>';
+}
+
+function refreshList(mode) {
+  const list = document.querySelector('#list-'+mode);
+  if (!list) return;
+  list.innerHTML = articleList(mode);
+  const create = document.querySelector('[data-list-create="'+mode+'"]');
+  if (create) create.hidden = !canCreateSearched(mode);
+  const toggle = document.querySelector('[data-toggle-groups="'+mode+'"]');
+  if (toggle) toggle.textContent = collapsedGroups[mode].size ? 'Desplega-ho tot' : 'Replega-ho tot';
+}
+
 function matchesArticleName(article, query, exact = false) {
   return [article.name,article.shared_name].filter(Boolean)
     .some(name => exact ? searchKey(name) === query : searchKey(name).includes(query));
 }
 
-function orderMatches() {
-  const query = searchKey(orderSearch);
-  return data.articles.filter(article => !article.archived && matchesArticleName(article,query));
-}
-
 function order() {
   const draft = data.draft.lines;
-  const lookup = '<div class="order-lookup"><form id="order-add-search">'+
-    '<label>Afegeix un article<input id="order-search" name="articleName" placeholder="Cerca pel nom" type="search" enterkeyhint="done" maxlength="120" required aria-controls="order-matches" autocomplete="off" value="'+escape(orderSearch)+'"></label>'+
-    '<button type="submit" id="order-search-submit" class="primary" hidden>Crea l’article</button></form>'+
-    '<div id="order-matches" class="order-matches" role="group" aria-label="Articles trobats" hidden></div></div>';
   return '<article class="card order-lines"><div class="order-list-heading"><div><h2>Nova comanda</h2>'+
     '<div class="meta">'+draftArticleIds().size+' de '+data.articles.length+' articles a la comanda</div></div>'+
-    '<div class="order-list-filters"><label>Categoria<select id="order-category-filter">'+
-    options([...data.categories].sort((a,b) => a.name.localeCompare(b.name,'ca')).concat(
-      data.articles.some(article => !article.category_id) ? [{id:'uncategorized',name:'Sense categoria'}] : []),
-      orderCategory,'Totes')+'</select></label>'+
-    '<label>Proveïdor<select id="order-supplier-filter">'+
-    options(data.suppliers,orderSupplier,'Tots')+'</select></label>'+
+    '<div class="order-list-filters">'+listFilters('order')+
     '<button type="button" id="order-visibility" aria-pressed="'+onlyOrdered+'"><span aria-hidden="true">👁︎</span> Només la comanda</button></div></div>'+
-    lookup+'<div class="group-tools">'+groupToggleButton('order')+'</div><div id="order-groups">'+orderGroups(draft)+'</div>'+
+    listLookup('order')+'<div class="group-tools">'+groupToggleButton('order')+'</div><div id="list-order">'+articleList('order')+'</div>'+
     (draft.length ? '<div class="actions order-send"><button class="primary" id="generate">Desa i genera els missatges</button></div>' : '')+
     '</article>';
 }
 
-function orderGroups(draft) {
-  const byArticle = Map.groupBy(draft.filter(line => !orderSupplier || line.supplier === orderSupplier),line => line.article);
-  const supplierArticles = new Set(data.offers.filter(offer => offer.supplier_id === orderSupplier).map(offer => offer.article_id));
-  const articles = data.articles.filter(article =>
-    matchesOrderCategory(article) && (!article.archived || byArticle.has(article.id)) && (onlyOrdered ? byArticle.has(article.id) :
-      !orderSupplier || supplierArticles.has(article.id) || byArticle.has(article.id)));
-  const groups = Map.groupBy(articles,article => article.category_id || '');
-  const sorted = [...groups].sort(([a],[b]) => categoryName(a).localeCompare(categoryName(b),'ca'));
-  return sorted.map(([category,items]) => {
-    const ordered = items.filter(article => byArticle.has(article.id)).length;
-    return categoryGroup('order',category,items.length+(items.length === 1 ? ' article' : ' articles')+(ordered ? ' · ✓ '+ordered : ''),
-      items.map(article => {
-        const lines = byArticle.get(article.id);
-        return lines ? lines.map(line => orderListRow(article,line,draft.indexOf(line))).join('') : orderListRow(article);
-      }).join(''),Boolean(orderCategory));
-  }).join('') || empty(orderCategory || orderSupplier ? 'No hi ha articles que coincideixin amb els filtres.' :
-      onlyOrdered ? 'Encara no hi ha cap article a la comanda.' :
-      !request && !data.articles.length ? 'El catàleg de prova és buit. Escriu un nom a «Afegeix un article» per crear-ne un.' :
-      'El catàleg és buit.');
-}
-
 function matchesOrderCategory(article) {
-  return !orderCategory || (article?.category_id || 'uncategorized') === orderCategory;
+  return !orderCategory || (article?.category_id || '-') === orderCategory;
 }
 
 function categoryName(id) {
@@ -1553,23 +1558,6 @@ function articleSheet(article, index) {
       (used ? '' : '<button type="button" class="remove" data-delete-article="'+id+'">Elimina</button>')+'</div>';
 }
 
-function orderOptions() {
-  const matches = orderSearch.trim() && showMatches ? orderMatches() : [];
-  const results = document.querySelector('#order-matches');
-  results.hidden = !matches.length;
-  const added = draftArticleIds();
-  results.innerHTML = matches.map(article => {
-    const category = byId('categories',article.category_id)?.name;
-    const inDraft = added.has(article.id);
-    return '<button type="button" data-pick-article="'+escape(article.id)+'"'+(inDraft ? ' class="in-draft"' : '')+'>'+escape(article.name)+
-      (inDraft ? draftBadge : '')+(category ? '<span class="meta">'+escape(category)+'</span>' : '')+'</button>';
-  }).join('');
-  const query = searchKey(orderSearch.trim());
-  const existing = query && data.articles.some(article => matchesArticleName(article,query,true));
-  // Només cal el botó quan l'article no existeix (per crear-lo). Per triar-ne un, n'hi ha prou amb prémer-lo a la llista o la tecla de retorn.
-  document.querySelector('#order-search-submit').hidden = !(query && !existing);
-}
-
 function orderDefaults(article) {
   const units = purchaseUnits();
   const offers = data.offers.filter(offer => offer.article_id === article.id && byId('suppliers',offer.supplier_id));
@@ -1584,7 +1572,7 @@ function orderDefaults(article) {
 
 // Situa el focus a la fila d'un article de la llista de Nova comanda i la remarca un moment.
 function focusOrderArticle(id) {
-  const pencil = [...document.querySelectorAll('#order-groups [data-order-editor]')].find(item => item.dataset.orderEditor === id);
+  const pencil = [...document.querySelectorAll('#list-order [data-order-editor]')].find(item => item.dataset.orderEditor === id);
   const row = pencil?.closest('.order-list-row');
   if (!row) return;
   const group = row.closest('details');
@@ -1593,6 +1581,12 @@ function focusOrderArticle(id) {
   row.querySelector('.order-toggle')?.focus({preventScroll:true});
   row.classList.add('just-added');
   setTimeout(() => row.classList.remove('just-added'),2500);
+}
+
+// Després de marcar o desmarcar a Nova comanda, el focus es queda a la mateixa fila (sense desplaçar la pantalla).
+function focusRowToggle(id) {
+  const pencil = [...document.querySelectorAll('#list-order [data-order-editor]')].find(item => item.dataset.orderEditor === id);
+  pencil?.closest('.order-list-row')?.querySelector('.order-toggle')?.focus({preventScroll:true});
 }
 
 async function pickOrderArticle(id, button) {
@@ -1993,7 +1987,6 @@ function render() {
   if (invoiceReview && section === 'purchases') syncInvoiceReview(document.querySelector('#purchase-review'));
   content.innerHTML = section === 'order' ? order() : section === 'history' ? history() : section === 'purchases' ? purchasesView() :
     '<section class="card main-card"><h2>'+sections[section]+'</h2>'+catalog()+'</section>';
-  if (section === 'order') orderOptions();
   refreshArticleSheet();
 }
 
@@ -2025,7 +2018,7 @@ document.addEventListener('click',async event => {
     section = 'articles';
     notify('');
     render();
-    const search = document.querySelector('#article-search');
+    const search = document.querySelector('#articles-search');
     search.scrollIntoView({block:'nearest'});
     search.focus();
   } else if (target.addArticle || Object.hasOwn(target,'closeLine')) {
@@ -2047,9 +2040,16 @@ document.addEventListener('click',async event => {
     else document.querySelectorAll('details[data-group-scope="'+scope+'"]').forEach(group => set.add(group.dataset.groupCategory));
     saveCollapsedGroups();
     refreshGroups(scope);
+  } else if (target.selectArticle) {
+    // A Articles, prémer la fila la marca o la desmarca.
+    if (mergeSelection.has(target.selectArticle)) mergeSelection.delete(target.selectArticle);
+    else mergeSelection.add(target.selectArticle);
+    refreshList('articles');
+    document.querySelector('#article-merge-controls').innerHTML = articleMergeControls();
+    [...document.querySelectorAll('[data-select-article]')].find(item => item.dataset.selectArticle === target.selectArticle)?.focus();
   } else if (button.id === 'select-visible-articles') {
     // Només els que es veuen: no compten els de categories replegades.
-    [...content.querySelectorAll('[data-merge-article]')].filter(input => !input.closest('details:not([open])')).forEach(input => mergeSelection.add(input.dataset.mergeArticle));
+    [...content.querySelectorAll('[data-select-article]')].filter(item => !item.closest('details:not([open])')).forEach(item => mergeSelection.add(item.dataset.selectArticle));
     render();
   } else if (button.id === 'clear-article-merge') {
     mergeSelection.clear();
@@ -2134,7 +2134,10 @@ document.addEventListener('click',async event => {
     render();
     document.querySelector('#catalog input')?.focus();
   } else if (target.markArticle) {
+    // Si s'havia filtrat amb la cerca, la llista torna a ser sencera: es va a l'article i es remarca.
+    const searched = Boolean(orderSearch.trim());
     await pickOrderArticle(target.markArticle,button);
+    if (!document.querySelector('#order-dialog')?.open) searched ? focusOrderArticle(target.markArticle) : focusRowToggle(target.markArticle);
   } else if (target.pickArticle) {
     await pickOrderArticle(target.pickArticle,button);
     if (!document.querySelector('#order-dialog')?.open) focusOrderArticle(target.pickArticle);
@@ -2143,11 +2146,13 @@ document.addEventListener('click',async event => {
   } else if (button.id === 'cancel-quick') {
     creatingArticle = false;
     render();
-    document.querySelector('#order-search').focus();
+    document.querySelector('#order-search')?.focus();
   } else if (target.unlink) {
     await save({action:'unlink',article:edit,supplier:target.unlink},null,button);
   } else if (Object.hasOwn(target,'remove')) {
+    const removed = data.draft.lines[Number(target.remove)]?.article;
     await saveDraft(data.draft.lines.filter((_,index) => index !== Number(target.remove)),button);
+    if (removed) focusRowToggle(removed);
   } else if (button.id === 'generate') {
     await flushDraft();
     await save({action:'order',revision:data.draft.revision}, result => {
@@ -2174,11 +2179,10 @@ document.addEventListener('click',async event => {
 });
 
 document.addEventListener('change', async event => {
-  if (event.target.dataset.mergeArticle) {
-    const {mergeArticle} = event.target.dataset;
-    if (event.target.checked) mergeSelection.add(mergeArticle);
-    else mergeSelection.delete(mergeArticle);
-    document.querySelector('#article-merge-controls').innerHTML = articleMergeControls();
+  if (event.target.dataset.listFilter) {
+    listState[event.target.dataset.list][event.target.dataset.listFilter] = event.target.value;
+    addingArticle = '';
+    refreshList(event.target.dataset.list);
     return;
   }
   if (event.target.id === 'invoice-article' || event.target.id === 'shared-article-id' || event.target.name === 'sharedName' && event.target.form?.id === 'link-shared-article') {
@@ -2194,12 +2198,6 @@ document.addEventListener('change', async event => {
       form.elements.id.value = sharedArticleId;
     }
     form.elements.alias.value = byId('articles',sharedArticleId)?.name || '';
-    return;
-  }
-  if (event.target.matches('#order-category-filter, #order-supplier-filter')) {
-    if (event.target.id === 'order-category-filter') orderCategory = event.target.value;
-    else orderSupplier = event.target.value;
-    document.querySelector('#order-groups').innerHTML = orderGroups(data.draft.lines);
     return;
   }
   if (event.target.matches('[data-contact-choice] select')) {
@@ -2227,12 +2225,6 @@ document.addEventListener('change', async event => {
     field.required = event.target.value === 'new';
     if (field.required) field.focus();
   }
-  if (event.target.id === 'category-filter' || event.target.id === 'supplier-filter') {
-    if (event.target.id === 'category-filter') categoryFilter = event.target.value;
-    else supplierFilter = event.target.value;
-    addingArticle = '';
-    refreshCatalogRows();
-  }
   if (event.target.matches('#catalog-line select[name=supplier]')) {
     const form = event.target.form;
     const article = byId('articles',form.elements.article.value);
@@ -2246,25 +2238,23 @@ document.addEventListener('change', async event => {
 });
 
 function refreshCatalogRows() {
-  document.querySelector('#catalog-rows').innerHTML = catalogRows();
+  if (section === 'articles') refreshList('articles');
+  else document.querySelector('#catalog-rows').innerHTML = catalogRows();
 }
 
 document.addEventListener('input', event => {
-  if (event.target.id === 'order-search') {
-    orderSearch = event.target.value;
-    showMatches = true;
-    orderOptions();
-  }
-  if (event.target.id !== 'article-search') return;
-  articleSearch = event.target.value;
+  const mode = event.target.dataset.listSearch;
+  if (!mode) return;
+  listState[mode].search = event.target.value;
   addingArticle = '';
-  refreshCatalogRows();
-  document.querySelector('#article-search-submit').hidden = !canCreateSearchedArticle();
+  refreshList(mode);
 });
 
 document.addEventListener('keydown', event => {
-  if (event.target.id !== 'order-search' || event.key !== 'ArrowDown') return;
-  const first = document.querySelector('#order-matches button');
+  // Fletxa avall a la cerca: va al primer article de la llista.
+  const mode = event.target.dataset.listSearch;
+  if (!mode || event.key !== 'ArrowDown') return;
+  const first = [...document.querySelectorAll('#list-'+mode+' .order-toggle')].find(item => !item.closest('details:not([open])'));
   if (!first) return;
   event.preventDefault();
   first.focus();
@@ -2294,25 +2284,24 @@ document.addEventListener('submit',async event => {
       addingArticle = '';
       edit = target.id;
     },event.submitter,()=>'Articles fusionats.');
-  } else if (form.id === 'article-add-search') {
-    if (canCreateSearchedArticle()) openNewArticleDialog(articleSearch.trim(),'articles');
-  } else if (form.id === 'order-add-search') {
-    if (busy || !values.articleName.trim()) return;
-    orderSearch = values.articleName.trim();
-    const matches = orderMatches().filter(article => matchesArticleName(article,searchKey(orderSearch),true));
-    if (matches.length === 1) {
+  } else if (form.dataset.listLookup) {
+    // Tecla de retorn a «Cerca o crea un article» (igual a les dues pantalles).
+    const mode = form.dataset.listLookup;
+    const name = listState[mode].search.trim();
+    if (busy || !name) return;
+    const query = searchKey(name);
+    const matches = data.articles.filter(article => !article.archived && matchesArticleName(article,query,true));
+    if (matches.length === 1 && mode === 'order') {
       await pickOrderArticle(matches[0].id,event.submitter);
       if (!document.querySelector('#order-dialog')?.open) focusOrderArticle(matches[0].id);
+    } else if (matches.length === 1) {
+      openOrderEditor(matches[0],'',true);
     } else if (matches.length > 1) {
-      showMatches = true;
-      orderOptions();
-      document.querySelector('#order-matches button')?.focus();
-    } else if (data.articles.some(article => article.archived && matchesArticleName(article,searchKey(orderSearch),true))) {
+      [...document.querySelectorAll('#list-'+mode+' .order-toggle')].find(item => !item.closest('details:not([open])'))?.focus();
+    } else if (data.articles.some(article => article.archived && matchesArticleName(article,query,true))) {
       notify('Aquest article està arxivat. Restaura’l des de Menú → Articles → Mostra els arxivats.',true);
     } else {
-      showMatches = false;
-      orderOptions();
-      openNewArticleDialog(orderSearch,'order');
+      openNewArticleDialog(name,mode);
     }
   } else if (Object.hasOwn(form.dataset,'orderRecipient')) {
     await openOrderRecipient(form,event.submitter);
