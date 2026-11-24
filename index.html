@@ -5,8 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="referrer" content="no-referrer">
 <title>GestoCatalog</title>
-<link rel="icon" type="image/png" href="./icon.png?v=1.23.0">
-<link rel="apple-touch-icon" sizes="180x180" href="./icon.png?v=1.23.0">
+<link rel="icon" type="image/png" href="./icon.png?v=1.23.1">
+<link rel="apple-touch-icon" sizes="180x180" href="./icon.png?v=1.23.1">
 <style>:root{color-scheme:light;--bg:#f7f8fd;--tx:#28377e;--mu:#566598;--ln:#303f91;--surface:#fff;--soft:#f0f2fc;--border:#d4daf1;--field:#b6bfdf;--on:#fff;--red:#b42318;--green:#17734a}
 :root[data-theme=dark]{color-scheme:dark;--bg:#10152c;--tx:#e5e9ff;--mu:#adb8e5;--ln:#a1afff;--surface:#1b2447;--soft:#232f59;--border:#425080;--field:#6371a0;--on:#10152c;--red:#ff9992;--green:#84dbab}
 *{box-sizing:border-box}
@@ -230,6 +230,7 @@ img,video,canvas{max-width:100%;height:auto}
 #article-add-search button{min-height:46px}
 #quick-article label.full{display:grid;margin-bottom:12px}
 #quick-article .grid{grid-template-columns:repeat(auto-fit,minmax(min(100%,160px),1fr))}
+.order-list-row.just-added{outline:3px solid var(--accent,#7b8cf0);outline-offset:2px;border-radius:10px;transition:outline-color .3s}
 
 .worker-profiles .worker-profile-item{border-top:1px solid var(--border);padding:10px 0}
 .worker-profile-item>summary,.worker-profile-inactive>summary{cursor:pointer;min-height:34px;display:flex;align-items:center;justify-content:space-between;gap:12px}
@@ -264,7 +265,7 @@ img,video,canvas{max-width:100%;height:auto}
 <body>
 <main>
 <header class="topbar">
-  <div class="brand"><h1>GestoCatalog</h1><div class="meta version">Versió 1.23.0<span id="sync-state" role="status"></span></div></div>
+  <div class="brand"><h1>GestoCatalog</h1><div class="meta version">Versió 1.23.1<span id="sync-state" role="status"></span></div></div>
   <div class="top-actions">
     <div class="menu-anchor">
       <button id="menu-toggle" type="button" aria-label="Menú" aria-expanded="false" aria-controls="menu-panel" hidden><span aria-hidden="true">☰</span><span class="top-action-label" aria-hidden="true">Menú</span></button>
@@ -1491,6 +1492,17 @@ function orderDefaults(article) {
   };
 }
 
+// Situa el focus a la fila d'un article de la llista de Nova comanda i la remarca un moment.
+function focusOrderArticle(id) {
+  const pencil = [...document.querySelectorAll('#order-groups [data-order-editor]')].find(item => item.dataset.orderEditor === id);
+  const row = pencil?.closest('.order-list-row');
+  if (!row) return;
+  row.scrollIntoView({block:'center',behavior:'smooth'});
+  row.querySelector('.order-toggle')?.focus({preventScroll:true});
+  row.classList.add('just-added');
+  setTimeout(() => row.classList.remove('just-added'),2500);
+}
+
 async function pickOrderArticle(id, button) {
   if (busy) return;
   const article = byId('articles',id);
@@ -2289,7 +2301,12 @@ document.addEventListener('submit',async event => {
         supplierFilter = '';
       }
     },document.querySelector('#order-dialog button.primary'),()=>'Article creat.');
-    if (fromOrder && createdId && byId('articles',createdId)) await pickOrderArticle(createdId);
+    if (fromOrder && createdId && byId('articles',createdId)) {
+      // Que l'article nou no quedi amagat pel filtre de categoria.
+      if (!matchesOrderCategory(byId('articles',createdId))) orderCategory = '';
+      await pickOrderArticle(createdId);
+      focusOrderArticle(createdId);
+    }
   } else if (form.id === 'catalog-line') {
     await addDraftLine(values,event.submitter,true);
   }
