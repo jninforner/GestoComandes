@@ -5,8 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="referrer" content="no-referrer">
 <title>GestoCatalog</title>
-<link rel="icon" type="image/png" href="./icon.png?v=1.31.0">
-<link rel="apple-touch-icon" sizes="180x180" href="./icon.png?v=1.31.0">
+<link rel="icon" type="image/png" href="./icon.png?v=1.31.1">
+<link rel="apple-touch-icon" sizes="180x180" href="./icon.png?v=1.31.1">
 <style>:root{color-scheme:light;--bg:#f7f8fd;--tx:#28377e;--mu:#566598;--ln:#303f91;--surface:#fff;--soft:#f0f2fc;--border:#d4daf1;--field:#b6bfdf;--on:#fff;--red:#b42318;--green:#17734a}
 :root[data-theme=dark]{color-scheme:dark;--bg:#10152c;--tx:#e5e9ff;--mu:#adb8e5;--ln:#a1afff;--surface:#1b2447;--soft:#232f59;--border:#425080;--field:#6371a0;--on:#10152c;--red:#ff9992;--green:#84dbab}
 *{box-sizing:border-box}
@@ -216,8 +216,11 @@ img,video,canvas{max-width:100%;height:auto}
 .article-open .meta{font-size:14px}
 .icon-button{min-width:0;width:36px;min-height:36px;padding:0}
 .catalog-row{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:6px;border-top:1px solid var(--border);padding:2px 0}
-.catalog-row.with-move{grid-template-columns:minmax(0,1fr) auto auto}
-.catalog-row.with-move .order-steps{padding:0}
+.catalog-row.with-move{grid-template-columns:auto minmax(0,1fr) auto;background:var(--surface)}
+.drag-handle{min-width:0;width:36px;min-height:36px;padding:0;border:0;background:none;color:var(--mu);cursor:grab;touch-action:none;-webkit-user-select:none;user-select:none;display:grid;place-items:center}
+.drag-handle svg{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round}
+.catalog-row.dragging{position:relative;z-index:2;box-shadow:0 6px 18px rgba(0,0,0,.18);border-radius:10px;opacity:.95}
+.catalog-row.dragging .drag-handle{cursor:grabbing}
 .catalog-name{min-width:0;padding:6px 4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .icon-button svg{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
 .icon-button.remove{border-color:var(--red)}
@@ -319,7 +322,7 @@ details.order-category[open]>summary{border-radius:11px 11px 0 0}
 <body>
 <main>
 <header class="topbar">
-  <div class="brand"><h1>GestoCatalog</h1><div class="meta version">Versió 1.31.0<span id="sync-state" role="status"></span></div></div>
+  <div class="brand"><h1>GestoCatalog</h1><div class="meta version">Versió 1.31.1<span id="sync-state" role="status"></span></div></div>
   <div class="top-actions">
     <div class="menu-anchor">
       <button id="menu-toggle" type="button" aria-label="Menú" aria-expanded="false" aria-controls="menu-panel" hidden><span aria-hidden="true">☰</span><span class="top-action-label" aria-hidden="true">Menú</span></button>
@@ -1303,6 +1306,7 @@ const draftBadge = '<span class="draft-badge">✓ A la comanda</span>';
 
 const archiveIcon = '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="5" rx="1"/><path d="M5 9v10a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V9"/><path d="M10 13h4"/></svg>';
 const restoreIcon = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12a8 8 0 1 0 2.3-5.6"/><path d="M4 4v5h5"/></svg>';
+const dragIcon = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 7h14M5 12h14M5 17h14"/></svg>';
 const pencilIcon = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16v4z"/><path d="M13.5 6.5l4 4"/></svg>';
 const trashIcon = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16"/><path d="M9 7V4h6v3"/><path d="M6 7l1 13h10l1-13"/><path d="M10 11v6M14 11v6"/></svg>';
 
@@ -1378,20 +1382,20 @@ function catalogRows() {
   const isSupplier = section === 'suppliers';
   const names = {suppliers:'proveïdor',units:'unitat',categories:'categoria'};
   const list = data[section].filter(item => item.id !== pendingUnit);
-  const rows = list.map((item,index) => {
+  const rows = list.map(item => {
     const detail = isSupplier ? [item.contact,item.phone ? '+'+item.phone : 'Tria el contacte a WhatsApp'].filter(Boolean).join(' · ') : '';
     // Proveïdors i categories: prement el nom es mostren els seus articles. Unitats: només el nom.
     const label = '<strong>'+escape(item.name)+'</strong>'+(detail ? '<span class="meta"> · '+escape(detail)+'</span>' : '');
     const full = item.name+(detail ? ' · '+detail : '');
-    // Categories: ▲▼ per canviar-ne l'ordre (el de les llistes, els filtres i el missatge als proveïdors).
+    // Categories: la nansa (tres ratlles) es prem i s'arrossega per canviar-ne l'ordre
+    // (el de les llistes, els filtres i el missatge als proveïdors). Amb el teclat: fletxes amunt i avall.
     const move = section === 'categories'
-      ? '<span class="order-steps"><button type="button" class="order-step" data-category-move="-1" data-category-id="'+escape(item.id)+'"'+(index === 0 ? ' disabled' : '')+' aria-label="Puja '+escape(item.name)+'">▲</button>'+
-        '<button type="button" class="order-step" data-category-move="1" data-category-id="'+escape(item.id)+'"'+(index === list.length-1 ? ' disabled' : '')+' aria-label="Baixa '+escape(item.name)+'">▼</button></span>'
+      ? '<button type="button" class="drag-handle" data-category-drag="'+escape(item.id)+'" title="Arrossega per canviar l’ordre" aria-label="Mou '+escape(item.name)+' (fletxes amunt i avall)">'+dragIcon+'</button>'
       : '';
-    return '<div class="catalog-row'+(move ? ' with-move' : '')+'">'+
+    return '<div class="catalog-row'+(move ? ' with-move' : '')+'"'+(move ? ' data-category-row="'+escape(item.id)+'"' : '')+'>'+move+
       (isSupplier || section === 'categories'
         ? '<button type="button" class="article-open" data-browse-articles="'+escape(item.id)+'" title="Mostra els articles de '+escape(full)+'">'+label+'</button>'
-        : '<span class="catalog-name" title="'+escape(full)+'">'+label+'</span>')+move+
+        : '<span class="catalog-name" title="'+escape(full)+'">'+label+'</span>')+
       '<button type="button" class="icon-button" data-catalog-edit="'+escape(item.id)+'" title="Edita" aria-haspopup="dialog" aria-label="Edita '+escape(item.name)+'">'+pencilIcon+'</button></div>';
   });
   return rows.join('') || empty('Cap '+names[section]+' per mostrar.');
@@ -2504,8 +2508,6 @@ document.addEventListener('click',async event => {
     openOrderEditor(byId('articles',target.articleSheet),'',Object.hasOwn(target,'fromTools'));
   } else if (Object.hasOwn(target,'orderEditor')) {
     openOrderEditor(byId('articles',target.orderEditor),target.orderIndex);
-  } else if (target.categoryMove) {
-    await moveCategory(target.categoryId,Number(target.categoryMove));
   } else if (target.catalogEdit) {
     openCatalogEditor(byId(section,target.catalogEdit));
   } else if (button.id === 'close-order-dialog' || button.id === 'close-order-dialog-foot') {
@@ -2678,22 +2680,74 @@ document.addEventListener('change', async event => {
   }
 });
 
-// Canvia l'ordre d'una categoria (una posició amunt o avall). Es veu a l'instant i es desa en segon pla.
+// ---- Ordre de les categories: arrossegar per la nansa (dit o ratolí) ----
+// El canvi es veu a l'instant i es desa en segon pla, un darrere l'altre.
 let categoryOrderSaving = Promise.resolve();
-async function moveCategory(id, step) {
-  const list = data.categories;
-  const from = list.findIndex(item => item.id === id);
-  const to = from + step;
-  if (from < 0 || to < 0 || to >= list.length) return;
-  [list[from],list[to]] = [list[to],list[from]];
-  refreshCatalogRows();
-  document.querySelector('[data-category-id="'+CSS.escape(id)+'"][data-category-move="'+step+'"]:not(:disabled)')?.focus();
-  const ids = list.map(item => item.id);
+function saveCategoryOrder(ids) {
+  const before = data.categories.map(item => item.id).join();
+  if (ids.join() === before) return;
+  data.categories = ids.map(id => byId('categories',id)).filter(Boolean);
   categoryOrderSaving = categoryOrderSaving.then(() => api({action:'orderCategories',ids})).catch(async error => {
     notify(error.message || 'No s’ha pogut desar l’ordre de les categories.',true);
     try { data = await api(); render(); } catch { /* es manté la vista */ }
   });
 }
+
+let categoryDrag = null;
+document.addEventListener('pointerdown',event => {
+  const handle = event.target.closest?.('[data-category-drag]');
+  if (!handle || (event.pointerType === 'mouse' && event.button !== 0)) return;
+  const row = handle.closest('.catalog-row');
+  event.preventDefault();
+  handle.setPointerCapture(event.pointerId);
+  const top = row.getBoundingClientRect().top;
+  categoryDrag = {handle,row,pointer:event.pointerId,grab:event.clientY-top,shift:0,start:[...row.parentElement.children].indexOf(row)};
+  row.classList.add('dragging');
+});
+document.addEventListener('pointermove',event => {
+  const drag = categoryDrag;
+  if (!drag || event.pointerId !== drag.pointer) return;
+  event.preventDefault();
+  const {row} = drag;
+  // Passa la fila per sobre de les veïnes quan el dit en supera la meitat.
+  let sibling;
+  while ((sibling = row.previousElementSibling) && event.clientY - drag.grab < midY(sibling)) sibling.before(row);
+  while ((sibling = row.nextElementSibling) && event.clientY - drag.grab + row.offsetHeight > midY(sibling)) sibling.after(row);
+  const natural = row.getBoundingClientRect().top - drag.shift;
+  drag.shift = event.clientY - drag.grab - natural;
+  row.style.transform = 'translateY('+drag.shift+'px)';
+  // Si s'arriba a dalt o a baix de la pantalla, es desplaça sola.
+  if (event.clientY < 70) window.scrollBy(0,-12);
+  else if (event.clientY > window.innerHeight-70) window.scrollBy(0,12);
+},{passive:false});
+function midY(element) {
+  const rect = element.getBoundingClientRect();
+  return rect.top + rect.height/2;
+}
+function endCategoryDrag(event) {
+  const drag = categoryDrag;
+  if (!drag || event.pointerId !== drag.pointer) return;
+  categoryDrag = null;
+  drag.row.classList.remove('dragging');
+  drag.row.style.transform = '';
+  saveCategoryOrder([...drag.row.parentElement.querySelectorAll('[data-category-row]')].map(row => row.dataset.categoryRow));
+}
+document.addEventListener('pointerup',endCategoryDrag);
+document.addEventListener('pointercancel',endCategoryDrag);
+// Teclat: amb la nansa seleccionada, fletxes amunt i avall.
+document.addEventListener('keydown',event => {
+  const handle = event.target.closest?.('[data-category-drag]');
+  if (!handle || (event.key !== 'ArrowUp' && event.key !== 'ArrowDown')) return;
+  event.preventDefault();
+  const ids = data.categories.map(item => item.id);
+  const from = ids.indexOf(handle.dataset.categoryDrag);
+  const to = from + (event.key === 'ArrowUp' ? -1 : 1);
+  if (from < 0 || to < 0 || to >= ids.length) return;
+  [ids[from],ids[to]] = [ids[to],ids[from]];
+  saveCategoryOrder(ids);
+  refreshCatalogRows();
+  document.querySelector('[data-category-drag="'+CSS.escape(ids[to])+'"]')?.focus();
+});
 
 function refreshCatalogRows() {
   if (section === 'articles') refreshList('articles');
