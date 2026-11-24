@@ -5,8 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="referrer" content="no-referrer">
 <title>GestoCatalog</title>
-<link rel="icon" type="image/png" href="./icon.png?v=1.30.1">
-<link rel="apple-touch-icon" sizes="180x180" href="./icon.png?v=1.30.1">
+<link rel="icon" type="image/png" href="./icon.png?v=1.30.2">
+<link rel="apple-touch-icon" sizes="180x180" href="./icon.png?v=1.30.2">
 <style>:root{color-scheme:light;--bg:#f7f8fd;--tx:#28377e;--mu:#566598;--ln:#303f91;--surface:#fff;--soft:#f0f2fc;--border:#d4daf1;--field:#b6bfdf;--on:#fff;--red:#b42318;--green:#17734a}
 :root[data-theme=dark]{color-scheme:dark;--bg:#10152c;--tx:#e5e9ff;--mu:#adb8e5;--ln:#a1afff;--surface:#1b2447;--soft:#232f59;--border:#425080;--field:#6371a0;--on:#10152c;--red:#ff9992;--green:#84dbab}
 *{box-sizing:border-box}
@@ -147,7 +147,12 @@ img,video,canvas{max-width:100%;height:auto}
 #order-dialog::backdrop{background:#11183180}
 #order-dialog .order-editor{padding:0}
 
-.order-lines .order-lookup{margin:14px 0 0}
+.order-lines .order-lookup{position:sticky;top:0;z-index:4;margin:10px 0 0;padding:6px 0;background:inherit}
+.order-lines.is-searching .order-lookup{box-shadow:0 6px 8px -6px #11183140}
+.order-lines.is-searching [id^=list-]{min-height:100vh}
+.order-lines.hide-filters .order-list-filters{display:none}
+.order-lines .order-list-filters{margin-top:6px}
+.list-tools:not(:has(button:not([hidden]))){display:none}
 /* Cerca comuna de Nova comanda i Articles */
 .article-lookup{display:flex;gap:8px;align-items:end}
 .article-lookup label{flex:1 1 auto;min-width:0}
@@ -171,7 +176,7 @@ img,video,canvas{max-width:100%;height:auto}
   .order-list-filters label{width:100%;gap:2px;font-size:12px}
   .order-list-filters select{height:40px;min-height:40px;padding:4px 6px;text-overflow:ellipsis}
   .list-mode{grid-column:1/-1;justify-self:start;min-height:40px;padding-block:4px;font-size:14px}
-  .order-lines .order-lookup{margin-top:6px}
+  .order-lines .order-lookup{margin-top:4px;padding:4px 0}
   .article-lookup{gap:6px}
   .article-lookup label{gap:2px;font-size:12px}
   .article-lookup input,.article-lookup button{min-height:42px;padding-block:4px}
@@ -308,7 +313,7 @@ details.order-category[open]>summary{border-radius:11px 11px 0 0}
 <body>
 <main>
 <header class="topbar">
-  <div class="brand"><h1>GestoCatalog</h1><div class="meta version">Versió 1.30.1<span id="sync-state" role="status"></span></div></div>
+  <div class="brand"><h1>GestoCatalog</h1><div class="meta version">Versió 1.30.2<span id="sync-state" role="status"></span></div></div>
   <div class="top-actions">
     <div class="menu-anchor">
       <button id="menu-toggle" type="button" aria-label="Menú" aria-expanded="false" aria-controls="menu-panel" hidden><span aria-hidden="true">☰</span><span class="top-action-label" aria-hidden="true">Menú</span></button>
@@ -1112,17 +1117,19 @@ function articlesView() {
   return '<article class="card order-lines">'+listHeading('Articles',
       archivedArticles ? archived+(archived === 1 ? ' article arxivat' : ' articles arxivats') : active+(active === 1 ? ' article actiu' : ' articles actius')+(archived ? ' · '+archived+' arxivats' : ''),
       'articles','<button type="button" id="article-archive-view" class="list-mode" aria-pressed="'+archivedArticles+'"><span aria-hidden="true">🗄︎</span> Només els arxivats</button>')+
-    listLookup('articles')+
     listTools('articles','<button type="button" class="primary" data-new-article>+ Nou article</button><button type="button" id="select-visible-articles">'+selectVisibleLabel()+'</button>')+
     '<div id="article-merge-controls">'+articleMergeControls()+'</div>'+
     '<div id="list-articles">'+articleList('articles')+'</div>'+
     '<div class="list-extra">'+pdfImportCard()+'</div></article>';
 }
 
-// Capçalera comuna: títol, comptador i filtres (amb el botó propi de cada pantalla al costat).
+// Capçalera comuna: títol i comptador, la cerca just a sota (fixa a dalt mentre es busca) i després els filtres
+// (amb el botó propi de cada pantalla al costat). La cerca va abans dels filtres perquè, al mòbil, amb el teclat
+// obert, els resultats surtin just a sota i no quedin tapats.
 function listHeading(title, meta, mode, modeButton) {
-  return '<div class="order-list-heading"><div><h2>'+escape(title)+'</h2><div class="meta">'+escape(meta)+'</div></div>'+
-    '<div class="order-list-filters">'+listFilters(mode)+modeButton+'</div></div>';
+  return '<div class="order-list-heading"><div><h2>'+escape(title)+'</h2><div class="meta">'+escape(meta)+'</div></div></div>'+
+    listLookup(mode)+
+    '<div class="order-list-filters">'+listFilters(mode)+modeButton+'</div>';
 }
 
 // Fila d'eines comuna: accions de la pantalla a l'esquerra i «Replega-ho tot» a la dreta.
@@ -1397,8 +1404,9 @@ function categoryGroup(scope, category, count, body, forceOpen = false) {
     '<summary><span class="group-name">'+escape(categoryName(category))+'</span><span class="meta">'+escape(count)+'</span></summary>'+body+'</details>';
 }
 
+// Amb una cerca, els grups surten oberts: el botó no serveix i s'amaga (així els resultats queden més amunt).
 function groupToggleButton(scope) {
-  return '<button type="button" class="group-toggle" data-toggle-groups="'+scope+'">'+(collapsedGroups[scope].size ? 'Desplega-ho tot' : 'Replega-ho tot')+'</button>';
+  return '<button type="button" class="group-toggle" data-toggle-groups="'+scope+'"'+(searchKey(listState[scope]?.search || '') ? ' hidden' : '')+'>'+(collapsedGroups[scope].size ? 'Desplega-ho tot' : 'Replega-ho tot')+'</button>';
 }
 
 document.addEventListener('toggle',event => {
@@ -1537,7 +1545,10 @@ function refreshList(mode) {
   const create = document.querySelector('[data-list-create="'+mode+'"]');
   if (create) create.hidden = !canCreateSearched(mode);
   const toggle = document.querySelector('[data-toggle-groups="'+mode+'"]');
-  if (toggle) toggle.textContent = collapsedGroups[mode].size ? 'Desplega-ho tot' : 'Replega-ho tot';
+  if (toggle) {
+    toggle.textContent = collapsedGroups[mode].size ? 'Desplega-ho tot' : 'Replega-ho tot';
+    toggle.hidden = Boolean(searchKey(listState[mode].search));
+  }
 }
 
 function matchesArticleName(article, query, exact = false) {
@@ -1549,7 +1560,7 @@ function order() {
   const draft = data.draft.lines;
   return '<article class="card order-lines">'+listHeading('Nova comanda',draftArticleIds().size+' de '+data.articles.filter(article => !article.archived).length+' articles a la comanda','order',
     '<button type="button" id="order-visibility" class="list-mode" aria-pressed="'+onlyOrdered+'"><span aria-hidden="true">👁︎</span> Només la comanda</button>')+
-    listLookup('order')+listTools('order')+'<div id="list-order">'+articleList('order')+'</div>'+
+    listTools('order')+'<div id="list-order">'+articleList('order')+'</div>'+
     (draft.length ? '<div class="actions order-send"><button class="primary" id="generate">Desa i genera els missatges</button></div>' : '')+
     '</article>';
 }
@@ -2612,6 +2623,32 @@ document.addEventListener('input', event => {
   listState[mode].search = event.target.value;
   addingArticle = '';
   refreshList(mode);
+});
+
+// Mòbil: en tocar la cerca, la pàgina es desplaça perquè la cerca quedi a dalt de tot i els resultats
+// surtin just a sota (si no, el teclat els tapa). La llista té una alçada mínima mentre es busca
+// perquè sempre es pugui fer aquest desplaçament, encara que hi hagi pocs resultats.
+const touchScreen = window.matchMedia('(pointer:coarse)');
+function scrollSearchToTop(input) {
+  const lookup = input.closest('.order-lookup');
+  const anchor = lookup?.previousElementSibling;
+  if (!lookup || !anchor) return;
+  const top = anchor.getBoundingClientRect().bottom+window.scrollY;
+  window.scrollTo({top,behavior:'instant'});
+}
+document.addEventListener('focusin', event => {
+  const input = event.target;
+  if (!input.dataset?.listSearch || !touchScreen.matches) return;
+  const state = listState[input.dataset.listSearch];
+  // Mentre s'escriu, els filtres s'amaguen per deixar lloc als resultats (si n'hi ha cap de triat, es queden).
+  input.closest('.order-lines')?.classList.add('is-searching',...(state.category || state.supplier ? [] : ['hide-filters']));
+  scrollSearchToTop(input);
+  // L'iPhone també desplaça la pàgina quan obre el teclat: es torna a col·locar quan ha acabat.
+  setTimeout(() => { if (document.activeElement === input) scrollSearchToTop(input); },350);
+});
+document.addEventListener('focusout', event => {
+  if (!event.target.dataset?.listSearch) return;
+  event.target.closest('.order-lines')?.classList.remove('is-searching','hide-filters');
 });
 
 document.addEventListener('keydown', event => {
