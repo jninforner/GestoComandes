@@ -5,8 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="referrer" content="no-referrer">
 <title>GestoCatalog</title>
-<link rel="icon" type="image/png" href="./icon.png?v=1.21.1">
-<link rel="apple-touch-icon" sizes="180x180" href="./icon.png?v=1.21.1">
+<link rel="icon" type="image/png" href="./icon.png?v=1.22.0">
+<link rel="apple-touch-icon" sizes="180x180" href="./icon.png?v=1.22.0">
 <style>:root{color-scheme:light;--bg:#f7f8fd;--tx:#28377e;--mu:#566598;--ln:#303f91;--surface:#fff;--soft:#f0f2fc;--border:#d4daf1;--field:#b6bfdf;--on:#fff;--red:#b42318;--green:#17734a}
 :root[data-theme=dark]{color-scheme:dark;--bg:#10152c;--tx:#e5e9ff;--mu:#adb8e5;--ln:#a1afff;--surface:#1b2447;--soft:#232f59;--border:#425080;--field:#6371a0;--on:#10152c;--red:#ff9992;--green:#84dbab}
 *{box-sizing:border-box}
@@ -258,7 +258,7 @@ img,video,canvas{max-width:100%;height:auto}
 <body>
 <main>
 <header class="topbar">
-  <div class="brand"><h1>GestoCatalog</h1><div class="meta version">Versió 1.21.1<span id="sync-state" role="status"></span></div></div>
+  <div class="brand"><h1>GestoCatalog</h1><div class="meta version">Versió 1.22.0<span id="sync-state" role="status"></span></div></div>
   <div class="top-actions">
     <div class="menu-anchor">
       <button id="menu-toggle" type="button" aria-label="Menú" aria-expanded="false" aria-controls="menu-panel" hidden><span aria-hidden="true">☰</span><span class="top-action-label" aria-hidden="true">Menú</span></button>
@@ -940,6 +940,41 @@ function catalogFields(current) {
       '<p class="meta">Pots fer servir <code>{comercial}</code>, <code>{proveidor}</code> i <code>{articles}</code>. Si deixes el missatge buit, s’utilitzarà el text per defecte.</p>' : '');
 }
 
+// Pantalla emergent per crear un article, la mateixa des de Nova comanda i des d'Articles.
+// context 'order': en crear-lo s'afegeix a la comanda. context 'articles': només es crea.
+function openNewArticleDialog(name, context) {
+  let dialog = document.querySelector('#order-dialog');
+  if (!dialog) {
+    dialog = document.createElement('dialog');
+    dialog.id = 'order-dialog';
+    dialog.setAttribute('aria-labelledby','order-dialog-title');
+    dialog.addEventListener('close',() => { sheetId = ''; });
+    document.querySelector('#workspace').append(dialog);
+  }
+  sheetId = '';
+  const category = context === 'order' ? (orderCategory === 'uncategorized' ? '' : orderCategory) : (categoryFilter === '-' ? '' : categoryFilter);
+  const supplier = context === 'order' ? orderSupplier : supplierFilter;
+  dialog.innerHTML = '<div class="sheet-head"><h2 id="order-dialog-title">Nou article</h2><button type="button" id="close-order-dialog" aria-label="Tanca">✕</button></div>'+
+    '<form id="quick-article" data-context="'+context+'"><div class="grid">'+
+    '<label>Nom<input name="name" required maxlength="120" value="'+escape(name)+'"></label>'+
+    '<label>Categoria<select name="category">'+options([...data.categories].sort((a,b) => a.name.localeCompare(b.name,'ca')),category,'Sense categoria')+'</select></label>'+
+    '<label>Proveïdor<select name="supplier" required>'+options(data.suppliers,supplier,'Tria un proveïdor')+'</select></label>'+
+    '<label>Unitat de compra<select name="unit" required>'+options(purchaseUnits(),'','Tria una unitat')+'</select></label></div></form>'+
+    '<div class="actions sheet-foot">'+(data.suppliers.length ? '<button class="primary" form="quick-article">'+(context === 'order' ? 'Crea i afegeix a la comanda' : 'Crea l’article')+'</button>' :
+      '<button type="button" data-tab="suppliers">Dona d’alta un proveïdor</button>')+
+    '<button type="button" id="close-order-dialog-foot">Cancel·la</button></div>';
+  if (!dialog.open) dialog.showModal();
+  const form = dialog.querySelector('#quick-article');
+  (name.trim() ? form.elements.supplier.value ? form.elements.unit : form.elements.supplier : form.elements.name).focus();
+}
+
+// A Articles: si la cerca no troba l'article, s'ofereix crear-lo.
+function articleCreateHint() {
+  const query = searchKey(articleSearch.trim());
+  if (!query || data.articles.some(article => matchesArticleName(article,query,true))) return '';
+  return '<button type="button" class="primary" data-create-article>Crea l’article «'+escape(articleSearch.trim())+'»</button>';
+}
+
 // Llapis de proveïdors, unitats i categories: la fitxa s'edita en un diàleg, amb els botons a baix.
 function openCatalogEditor(item) {
   if (!item) return;
@@ -975,7 +1010,8 @@ function catalog() {
     '<div class="actions"><button class="primary">Desa</button></div></form></details></article>')+
     (isArticle ? pdfImportCard() : '')+
     '<article class="card"><h2>'+{suppliers:'Proveïdors registrats',articles:'Articles registrats',units:'Unitats registrades',categories:'Categories registrades'}[section]+'</h2>'+filters+(isArticle ?
-      '<div class="actions catalog-management"><button type="button" id="article-archive-view" aria-pressed="'+archivedArticles+'">'+(archivedArticles ? 'Mostra els articles actius' : 'Mostra els arxivats')+'</button>'+
+      '<div id="article-create-hint" class="actions">'+articleCreateHint()+'</div>'+
+      '<div class="actions catalog-management"><button type="button" class="primary" data-new-article>+ Nou article</button><button type="button" id="article-archive-view" aria-pressed="'+archivedArticles+'">'+(archivedArticles ? 'Mostra els articles actius' : 'Mostra els arxivats')+'</button>'+
       '<button type="button" id="select-visible-articles">Marca tots els que es veuen</button></div>'+
       '<div id="article-merge-controls">'+articleMergeControls()+'</div>' : '')+'<div id="catalog-rows">'+
     catalogRows()+'</div></article>';
@@ -1288,18 +1324,10 @@ function orderMatches() {
 
 function order() {
   const draft = data.draft.lines;
-  const quickArticle = creatingArticle ? '<form id="quick-article" class="item"><h3>Nou article</h3><div class="grid">'+
-    '<label>Nom<input name="name" required maxlength="120" value="'+escape(orderSearch.trim())+'"></label>'+
-    '<label>Categoria<select name="category">'+options(data.categories,orderCategory,'Sense categoria')+'</select></label>'+
-    '<label>Proveïdor<select name="supplier" required>'+options(data.suppliers,'','Tria un proveïdor')+'</select></label>'+
-    '<label>Unitat de compra<select name="unit" required>'+options(purchaseUnits(),'','Tria una unitat')+'</select></label></div>'+
-    '<div class="actions">'+(data.suppliers.length ? '<button class="primary">Crea i afegeix a la comanda</button>' : '<button type="button" data-tab="suppliers">Dona d’alta un proveïdor</button>')+
-    '<button id="cancel-quick" type="button">Cancel·la</button></div></form>' : '';
   const lookup = '<div class="order-lookup"><form id="order-add-search">'+
     '<label>Afegeix un article<input id="order-search" name="articleName" placeholder="Cerca pel nom" type="search" enterkeyhint="done" maxlength="120" required aria-controls="order-matches" autocomplete="off" value="'+escape(orderSearch)+'"></label>'+
     '<button type="submit" id="order-search-submit" class="primary" hidden>Crea l’article</button></form>'+
-    '<div id="order-matches" class="order-matches" role="group" aria-label="Articles trobats" hidden></div>'+
-    quickArticle+'</div>';
+    '<div id="order-matches" class="order-matches" role="group" aria-label="Articles trobats" hidden></div></div>';
   return '<article class="card order-lines"><div class="order-list-heading"><div><h2>Nova comanda</h2>'+
     '<div class="meta">'+draftArticleIds().size+' de '+data.articles.length+' articles a la comanda</div></div>'+
     '<div class="order-list-filters"><label>Categoria<select id="order-category-filter">'+
@@ -1866,6 +1894,7 @@ document.addEventListener('click',async event => {
       setMenu(false);
       menuButton.focus();
     }
+    button.closest('dialog')?.close();
     section = target.tab;
     addingArticle = '';
     edit = '';
@@ -1988,6 +2017,8 @@ document.addEventListener('click',async event => {
     await pickOrderArticle(target.markArticle,button);
   } else if (target.pickArticle) {
     await pickOrderArticle(target.pickArticle,button);
+  } else if (Object.hasOwn(target,'newArticle') || Object.hasOwn(target,'createArticle')) {
+    openNewArticleDialog(Object.hasOwn(target,'createArticle') ? articleSearch.trim() : '','articles');
   } else if (button.id === 'cancel-quick') {
     creatingArticle = false;
     render();
@@ -2107,9 +2138,16 @@ document.addEventListener('input', event => {
   articleSearch = event.target.value;
   addingArticle = '';
   refreshCatalogRows();
+  document.querySelector('#article-create-hint').innerHTML = articleCreateHint();
 });
 
 document.addEventListener('keydown', event => {
+  // A Articles, la tecla de retorn a la cerca obre la creació si l'article no existeix.
+  if (event.target.id === 'article-search' && event.key === 'Enter' && articleCreateHint()) {
+    event.preventDefault();
+    openNewArticleDialog(articleSearch.trim(),'articles');
+    return;
+  }
   if (event.target.id !== 'order-search' || event.key !== 'ArrowDown') return;
   const first = document.querySelector('#order-matches button');
   if (!first) return;
@@ -2154,10 +2192,9 @@ document.addEventListener('submit',async event => {
     } else if (data.articles.some(article => article.archived && matchesArticleName(article,searchKey(orderSearch),true))) {
       notify('Aquest article està arxivat. Restaura’l des de Menú → Articles → Mostra els arxivats.',true);
     } else {
-      creatingArticle = true;
       showMatches = false;
-      render();
-      document.querySelector('#quick-article select[name=supplier]').focus();
+      orderOptions();
+      openNewArticleDialog(orderSearch,'order');
     }
   } else if (Object.hasOwn(form.dataset,'orderRecipient')) {
     await openOrderRecipient(form,event.submitter);
@@ -2233,14 +2270,24 @@ document.addEventListener('submit',async event => {
   } else if (form.id === 'offer') {
     await save({...values,action:'offer',article:edit},null,event.submitter);
   } else if (form.id === 'quick-article') {
+    const fromOrder = form.dataset.context === 'order';
     let createdId;
     await save({...values,action:'quickArticle'},result => {
       createdId = result.id;
-      orderSearch = values.name.trim();
-      showMatches = false;
-      creatingArticle = false;
-    },event.submitter,()=>'Article creat.');
-    if (createdId && byId('articles',createdId)) await pickOrderArticle(createdId);
+      form.closest('dialog')?.close();
+      if (fromOrder) {
+        orderSearch = values.name.trim();
+        showMatches = false;
+        creatingArticle = false;
+      } else {
+        // Es mostra l'article nou a la llista.
+        articleSearch = values.name.trim();
+        archivedArticles = false;
+        categoryFilter = '';
+        supplierFilter = '';
+      }
+    },document.querySelector('#order-dialog button.primary'),()=>'Article creat.');
+    if (fromOrder && createdId && byId('articles',createdId)) await pickOrderArticle(createdId);
   } else if (form.id === 'catalog-line') {
     await addDraftLine(values,event.submitter,true);
   }
