@@ -5,8 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="referrer" content="no-referrer">
 <title>GestoCatalog</title>
-<link rel="icon" type="image/png" href="./icon.png?v=1.24.3">
-<link rel="apple-touch-icon" sizes="180x180" href="./icon.png?v=1.24.3">
+<link rel="icon" type="image/png" href="./icon.png?v=1.24.4">
+<link rel="apple-touch-icon" sizes="180x180" href="./icon.png?v=1.24.4">
 <style>:root{color-scheme:light;--bg:#f7f8fd;--tx:#28377e;--mu:#566598;--ln:#303f91;--surface:#fff;--soft:#f0f2fc;--border:#d4daf1;--field:#b6bfdf;--on:#fff;--red:#b42318;--green:#17734a}
 :root[data-theme=dark]{color-scheme:dark;--bg:#10152c;--tx:#e5e9ff;--mu:#adb8e5;--ln:#a1afff;--surface:#1b2447;--soft:#232f59;--border:#425080;--field:#6371a0;--on:#10152c;--red:#ff9992;--green:#84dbab}
 *{box-sizing:border-box}
@@ -274,7 +274,7 @@ details.order-category[open]>summary{border-radius:11px 11px 0 0}
 <body>
 <main>
 <header class="topbar">
-  <div class="brand"><h1>GestoCatalog</h1><div class="meta version">Versió 1.24.3<span id="sync-state" role="status"></span></div></div>
+  <div class="brand"><h1>GestoCatalog</h1><div class="meta version">Versió 1.24.4<span id="sync-state" role="status"></span></div></div>
   <div class="top-actions">
     <div class="menu-anchor">
       <button id="menu-toggle" type="button" aria-label="Menú" aria-expanded="false" aria-controls="menu-panel" hidden><span aria-hidden="true">☰</span><span class="top-action-label" aria-hidden="true">Menú</span></button>
@@ -914,6 +914,21 @@ function notify(message, error = false) {
   if (message && !error) notifyTimer = setTimeout(() => { status.textContent = ''; },6000);
 }
 status.addEventListener('click',() => notify(''));
+// Els camps obligatoris buits també avisen amb el mateix missatge flotant (en lloc de la bombolla del navegador).
+let invalidShown = false;
+document.addEventListener('invalid',event => {
+  event.preventDefault();
+  if (invalidShown) return;
+  invalidShown = true;
+  setTimeout(() => { invalidShown = false; },0);
+  const field = event.target;
+  const label = field.closest('label')?.childNodes[0]?.textContent?.trim() || field.getAttribute('aria-label') || '';
+  const message = field.validity.valueMissing
+    ? (field.tagName === 'SELECT' ? 'Tria una opció a «'+label+'».' : 'Omple el camp «'+label+'».')
+    : (label ? 'Revisa el camp «'+label+'». ' : '')+field.validationMessage;
+  field.focus();
+  notify(message,true);
+},true);
 document.addEventListener('close',() => {
   // En tancar una pantalla emergent, l'avís torna a la pantalla principal.
   const home = document.querySelector('#workspace');
@@ -946,11 +961,6 @@ async function save(payload, done, button, success = () => 'Canvis desats.', aft
       }
     }
     const feedback = saved ? 'El canvi s’ha desat. Recarrega la pàgina per veure’l.' : error.message;
-    const editorError = button?.form?.querySelector('[data-editor-error]');
-    if (editorError?.isConnected) {
-      editorError.textContent = feedback;
-      editorError.hidden = false;
-    }
     notify(feedback,true);
   } finally {
     busy = false;
@@ -1022,7 +1032,7 @@ function openCatalogEditor(item) {
   dialog.innerHTML = '<div class="sheet-head"><h2 id="order-dialog-title">'+escape(item.name)+'</h2><button type="button" id="close-order-dialog" aria-label="Tanca">✕</button></div>'+
     '<section class="sheet-part"><h3>'+heading+'</h3>'+
     '<form id="catalog-edit" data-section="'+section+'" data-id="'+escape(item.id)+'">'+catalogFields(item)+
-    '<p class="error" data-editor-error role="alert" hidden></p></form></section>'+
+    '</form></section>'+
     '<div class="actions sheet-foot"><button class="primary" form="catalog-edit">Desa</button>'+
     '<button type="button" id="close-order-dialog-foot">Cancel·la</button></div>';
   if (!dialog.open) dialog.showModal();
@@ -1520,7 +1530,6 @@ function articleSheet(article, index) {
       '<label>Quantitat<input name="quantity" type="number" step="any" inputmode="decimal" required value="'+escape(line?.quantity ?? 1)+'"></label>'+
       '<label>Unitat<select name="unit" required>'+options(units,line?.unit || defaults.unit,'Tria una unitat')+'</select></label>'+
       '<label>Proveïdor<select name="supplier" required>'+options(suppliers,line?.supplier || defaults.supplier,'Tria un proveïdor')+'</select></label></div>'+
-      '<p class="error" data-editor-error role="alert" hidden></p>'+
       '<div class="actions"><button type="submit" class="primary">'+(line ? 'Desa la línia' : 'Afegeix a la comanda')+'</button>'+
 '</div></form>'
     : '<p class="meta">Per demanar-lo, tria-li un proveïdor a sota i desa la fitxa.</p>';
@@ -1540,7 +1549,6 @@ function articleSheet(article, index) {
         '<label>Unitat de compra del proveïdor<select form="article-sheet" name="offerUnit">'+options(data.units.filter(unit => unit.id !== pendingUnit),article.unit_id,'Tria una unitat')+'</select></label></div>' : '<p class="meta">Encara no hi ha proveïdors. Crea’n un a Menú → Proveïdors.</p>')+
     '</section>'+
     '<section class="sheet-part"><h3>Últimes compres</h3>'+articlePurchases(article.id)+'</section>'+
-    '<p class="error" id="sheet-error" role="alert" hidden></p>'+
     '<div class="actions sheet-foot"><button class="primary" form="article-sheet">Desa la fitxa</button><button type="button" data-archive-article="'+id+'">'+(article.archived ? 'Restaura' : 'Arxiva')+'</button>'+
       (used ? '' : '<button type="button" class="remove" data-delete-article="'+id+'">Elimina</button>')+'</div>';
 }
@@ -2313,9 +2321,7 @@ document.addEventListener('submit',async event => {
     const quantity = form.elements.quantity.valueAsNumber;
     if (!Number.isFinite(quantity) || quantity <= 0) {
       form.elements.quantity.focus();
-      form.elements.quantity.setCustomValidity('La quantitat ha de ser un número més gran que zero.');
-      form.elements.quantity.reportValidity();
-      form.elements.quantity.setCustomValidity('');
+      notify('La quantitat ha de ser un número més gran que zero.',true);
       return;
     }
     if (index === '') {
@@ -2375,8 +2381,7 @@ document.addEventListener('submit',async event => {
     // En desar la fitxa es desa també el proveïdor triat, i el diàleg d'edició es tanca.
     const id = sheetId;
     const addToOrder = sheetAddToOrder === id;
-    const error = document.querySelector('#sheet-error');
-    const showError = message => { error.textContent = message; error.hidden = false; };
+    const showError = message => notify(message,true);
     const {offerSupplier,offerUnit,...article} = values;
     if (offerSupplier && !offerUnit) { showError('Tria la unitat de compra del proveïdor.'); return; }
     if (busy) return;
