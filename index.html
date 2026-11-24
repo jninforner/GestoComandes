@@ -568,12 +568,13 @@ function renderAppleContactPicker() {
     (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
   if (!ios || typeof navigator.contacts?.select === 'function') return '';
   return '<details class="item" data-worker-ios-panel><summary>Tria de l’agenda de l’iPhone</summary>'+
-    '<p class="meta">Instal·la la drecera el primer cop. Després obre-la, tria la persona i torna a aquesta fitxa per enganxar el contacte.</p>'+
-    '<p><a class="button" href="https://jninforner.github.io/NexaTips/Nexa%20Contacte%202.shortcut">Instal·la la drecera Nexa Contacte 2</a></p>'+
-    '<a class="button" href="shortcuts://run-shortcut?name=Nexa%20Contacte%202">Obre el selector de Dreceres</a>'+
+    '<p class="meta">Prem «Tria el contacte», tria la persona i torna a aquesta fitxa per enganxar-lo.</p>'+
+    '<a class="button" href="shortcuts://run-shortcut?name=Nexa%20Contacte%202">Tria el contacte</a>'+
     '<label>Enganxa el contacte<textarea rows="3" data-worker-contact-paste spellcheck="false" autocapitalize="off"></textarea></label>'+
     '<button type="button" data-worker-apply-paste>Carrega el contacte</button>'+
-    '<details class="item"><summary>Configura-la a mà si cal</summary>'+
+    '<details class="item"><summary>Instal·la la drecera (només el primer cop)</summary>'+
+    '<p><a class="button" href="https://jninforner.github.io/NexaTips/Nexa%20Contacte%202.shortcut">Instal·la la drecera Nexa Contacte 2</a></p>'+
+    '<p class="meta">O bé configura-la a mà:</p>'+
     '<ol><li>A l’app Dreceres, crea una drecera que es digui <strong>Nexa Contacte 2</strong>.</li>'+
     '<li>Afegeix l’acció <strong>Selecciona un contacte</strong> i deixa la selecció múltiple desactivada.</li>'+
     '<li>Afegeix l’acció <strong>Text</strong>. Copia el format següent i, després de cada etiqueta, insereix la propietat corresponent del contacte seleccionat: nom complet, correu i telèfon.</li>'+
