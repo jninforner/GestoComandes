@@ -5,8 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="referrer" content="no-referrer">
 <title>GestoCatalog</title>
-<link rel="icon" type="image/png" href="./icon.png?v=1.33.0">
-<link rel="apple-touch-icon" sizes="180x180" href="./icon.png?v=1.33.0">
+<link rel="icon" type="image/png" href="./icon.png?v=1.34.0">
+<link rel="apple-touch-icon" sizes="180x180" href="./icon.png?v=1.34.0">
 <style>:root{color-scheme:light;--bg:#f7f8fd;--tx:#28377e;--mu:#566598;--ln:#303f91;--surface:#fff;--soft:#f0f2fc;--border:#d4daf1;--field:#b6bfdf;--on:#fff;--red:#b42318;--green:#17734a}
 :root[data-theme=dark]{color-scheme:dark;--bg:#10152c;--tx:#e5e9ff;--mu:#adb8e5;--ln:#a1afff;--surface:#1b2447;--soft:#232f59;--border:#425080;--field:#6371a0;--on:#10152c;--red:#ff9992;--green:#84dbab}
 *{box-sizing:border-box}
@@ -204,6 +204,9 @@ img,video,canvas{max-width:100%;height:auto}
 .purchase-article{grid-column:1/-1}
 .purchase-row-actions{display:flex;flex-wrap:wrap;align-items:center;gap:10px;justify-content:space-between}
 .purchase-row-actions .meta{flex:1 1 200px;margin:0}
+.match-tag{display:inline-block;font-size:.8em;font-weight:650;border-radius:999px;padding:1px 8px;margin-right:2px}
+.match-tag.is-existing{background:#e3f4e8;color:#1e6b3a}
+.match-tag.is-new{background:#fff1d6;color:#8a5a00}
 .purchase-check{display:flex;align-items:center;gap:6px;color:var(--tx)}
 .purchase-check input{width:auto;min-height:0}
 .purchase-head{width:100%;flex-direction:column;align-items:flex-start;gap:2px;border:0;background:transparent;padding:0;text-align:left}
@@ -339,7 +342,7 @@ details.order-category[open]>summary{border-radius:11px 11px 0 0}
 <body>
 <main>
 <header class="topbar">
-  <div class="brand"><h1>GestoCatalog</h1><div class="meta version">Versió 1.33.0<span id="sync-state" role="status"></span></div></div>
+  <div class="brand"><h1>GestoCatalog</h1><div class="meta version">Versió 1.34.0<span id="sync-state" role="status"></span></div></div>
   <div class="top-actions">
     <div class="menu-anchor">
       <button id="menu-toggle" type="button" aria-label="Menú" aria-expanded="false" aria-controls="menu-panel" hidden><span aria-hidden="true">☰</span><span class="top-action-label" aria-hidden="true">Menú</span></button>
@@ -2339,10 +2342,13 @@ function invoiceReviewForm() {
     '<div class="actions"><button class="primary">Desa la compra</button><button type="button" id="cancel-purchase">Cancel·la</button></div></form>';
 }
 
+const matchNotes = {previous:'Reconegut: és el que vas triar l’última vegada.', name:'Reconegut pel nom.',
+  ai:'Reconegut per la IA.', 'ai-unsure':'Proposat per la IA, però no n’està segura: comprova que sigui aquest.'};
 function articleHint(row) {
   if (row.discard) return 'Línia descartada: no es desarà.';
-  if (row.articleId) return 'Es desarà amb aquest article.';
-  if (row.newName) return 'No existeix: es crearà l’article «'+escape(row.newName)+'».';
+  const suggested = row.suggestion && row.suggestion.articleId === row.articleId && row.suggestion.newName === row.newName;
+  if (row.articleId) return '<span class="match-tag is-existing">Article existent</span> '+(suggested && matchNotes[row.suggestion.source] || 'Es desarà amb aquest article.');
+  if (row.newName) return '<span class="match-tag is-new">Article nou</span> No és al catàleg: es crearà «'+escape(row.newName)+'». Si ja el tens amb un altre nom, tria’l a la llista.';
   return 'Tria l’article o escriu el nom d’un de nou.';
 }
 
@@ -2406,8 +2412,12 @@ async function readPurchase(form, button) {
   try {
     const result = await api({action:'readInvoice',...await fileToBase64(file)});
     invoiceReview = {...result, rows:result.rows.map(row => {
-      const articleId = row.articleId && byId('articles',row.articleId) ? row.articleId : guessArticle(row.name);
-      return {...row, articleId, newName:'', toStock:row.fish, discard:false};
+      const known = row.articleId && byId('articles',row.articleId) ? row.articleId : '';
+      const articleId = known || guessArticle(row.name);
+      const source = known ? row.matchSource || 'previous' : articleId ? 'name' : '';
+      // Si no existeix, es proposa crear-lo amb el nom que suggereix la IA (o el de l'albarà).
+      const newName = articleId ? '' : (row.suggestedName || row.name);
+      return {...row, articleId, newName, toStock:row.fish, discard:false, suggestion:{articleId, newName, source}};
     })};
     duplicateAllowed = false;
     notify(result.rows.length ? 'Revisa les línies i desa la compra.' : 'No s’ha trobat cap línia a l’albarà.',!result.rows.length);
