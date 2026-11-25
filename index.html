@@ -5,8 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="referrer" content="no-referrer">
 <title>GestoCatalog</title>
-<link rel="icon" type="image/png" href="./icon.png?v=1.38.0">
-<link rel="apple-touch-icon" sizes="180x180" href="./icon.png?v=1.38.0">
+<link rel="icon" type="image/png" href="./icon.png?v=1.39.0">
+<link rel="apple-touch-icon" sizes="180x180" href="./icon.png?v=1.39.0">
 <style>:root{color-scheme:light;--bg:#f7f8fd;--tx:#28377e;--mu:#566598;--ln:#303f91;--surface:#fff;--soft:#f0f2fc;--border:#d4daf1;--field:#b6bfdf;--on:#fff;--red:#b42318;--green:#17734a}
 :root[data-theme=dark]{color-scheme:dark;--bg:#10152c;--tx:#e5e9ff;--mu:#adb8e5;--ln:#a1afff;--surface:#1b2447;--soft:#232f59;--border:#425080;--field:#6371a0;--on:#10152c;--red:#ff9992;--green:#84dbab}
 *{box-sizing:border-box}
@@ -315,6 +315,10 @@ details.order-category[open]>summary{border-radius:11px 11px 0 0}
 .swipe.dragging>.catalog-row{box-shadow:0 6px 18px rgba(0,0,0,.18);border-radius:10px;opacity:.95}
 .swipe>.item.swipe-row{padding-bottom:8px}
 
+/* Subcategories a la pantalla Categories: sagnades sota la categoria principal. */
+.catalog-row.subcategory{padding-left:28px}
+.catalog-row.subcategory .article-open strong::before{content:'— ';color:var(--mu)}
+
 .worker-profiles .worker-profile-item{border-top:1px solid var(--border);padding:10px 0}
 .worker-profile-item>summary,.worker-profile-inactive>summary{cursor:pointer;min-height:34px;display:flex;align-items:center;justify-content:space-between;gap:12px}
 .worker-profile-item>summary::before,.worker-profile-inactive>summary::before{content:"+"}
@@ -348,7 +352,7 @@ details.order-category[open]>summary{border-radius:11px 11px 0 0}
 <body>
 <main>
 <header class="topbar">
-  <div class="brand"><h1>GestoCatalog</h1><div class="meta version">Versió 1.38.0<span id="sync-state" role="status"></span></div></div>
+  <div class="brand"><h1>GestoCatalog</h1><div class="meta version">Versió 1.39.0<span id="sync-state" role="status"></span></div></div>
   <div class="top-actions">
     <div class="menu-anchor">
       <button id="menu-toggle" type="button" aria-label="Menú" aria-expanded="false" aria-controls="menu-panel" hidden><span aria-hidden="true">☰</span><span class="top-action-label" aria-hidden="true">Menú</span></button>
@@ -1010,7 +1014,7 @@ async function api(body) {
 // Si hi ha una pantalla emergent oberta, l'avís es mostra a sobre d'ella. Els d'èxit marxen sols; els d'error, en prémer-los.
 let notifyTimer = 0;
 let undoAction = null;
-function notify(message, error = false) {
+function notify(message, error = false, keep = false) {
   clearTimeout(notifyTimer);
   undoAction = null;
   const dialog = document.querySelector('dialog[open]');
@@ -1019,8 +1023,8 @@ function notify(message, error = false) {
   if (parent && status.parentElement !== parent) parent.append(status);
   status.textContent = message;
   status.classList.toggle('error',error);
-  status.title = message ? (error ? 'Prem per tancar l’avís' : '') : '';
-  if (message && !error) notifyTimer = setTimeout(() => { status.textContent = ''; },6000);
+  status.title = message ? (error || keep ? 'Prem per tancar l’avís' : '') : '';
+  if (message && !error && !keep) notifyTimer = setTimeout(() => { status.textContent = ''; },6000);
 }
 status.addEventListener('click',event => { if (!event.target.closest('[data-undo]')) notify(''); });
 // Avís amb el botó «Desfés» (ESTIL.md): dura el mateix que els avisos d'èxit.
@@ -1102,6 +1106,7 @@ function catalogFields(current) {
   const isSupplier = section === 'suppliers';
   return '<div class="grid">'+
     '<label>Nom<input name="name" required maxlength="120" value="'+escape(current?.name)+'"></label>'+
+    (section === 'categories' ? categoryParentField(current) : '')+
     (section === 'units' ? '<label>Nom en singular<input name="singular" maxlength="120" placeholder="'+escape(current ? guessSingular(current.name) : 'p. ex. caixa')+'" value="'+escape(current?.singular)+'"></label>' : '')+
     (isSupplier ? '<label>WhatsApp amb prefix internacional<input name="phone" type="tel" placeholder="+34 600 000 000" value="'+(current?.phone ? '+'+escape(current.phone) : '')+'"></label>' : '')+
     (isSupplier ? '<label>Nom del comercial<input name="contact" maxlength="120" value="'+escape(current?.contact)+'"></label>' : '')+
@@ -1110,6 +1115,15 @@ function catalogFields(current) {
     (section === 'units' ? '<p class="meta">El singular es fa servir al missatge del proveïdor quan en demanes 1. Si el deixes buit, es dedueix del nom.</p>' : '')+
     (isSupplier ? contactControls()+'<label>Missatge de WhatsApp<textarea name="messageTemplate" maxlength="1000" rows="4" placeholder="Bon dia, {comercial}! Us voldríem fer aquesta comanda:">'+escape(current?.message_template)+'</textarea></label>'+
       '<p class="meta">Pots fer servir <code>{comercial}</code>, <code>{proveidor}</code> i <code>{articles}</code>. Si deixes el missatge buit, s’utilitzarà el text per defecte.</p>' : '');
+}
+
+// Categoria principal d'una categoria (buit = és principal). Una categoria amb subcategories no pot anar dins d'una altra.
+function categoryParentField(current) {
+  const hasChildren = Boolean(current) && data.categories.some(item => item.parent_id === current.id);
+  const parents = data.categories.filter(item => !item.parent_id && item.id !== current?.id);
+  if (hasChildren) return '<input type="hidden" name="parentId" value=""><p class="meta">Té subcategories: és una categoria principal.</p>';
+  return '<label>Dins de la categoria<select name="parentId"><option value="">Cap (és una categoria principal)</option>'+
+    parents.map(item => '<option value="'+escape(item.id)+'"'+(item.id === current?.parent_id ? ' selected' : '')+'>'+escape(item.name)+'</option>').join('')+'</select></label>';
 }
 
 // Pantalla emergent per crear un article, la mateixa des de Nova comanda i des d'Articles.
@@ -1128,7 +1142,7 @@ function openNewArticleDialog(name, context) {
   const supplier = context === 'order' ? orderSupplier : supplierFilter;
   dialog.innerHTML = '<div class="sheet-head"><h2 id="order-dialog-title">Nou article</h2><button type="button" id="close-order-dialog" aria-label="Tanca">✕</button></div>'+
     '<form id="quick-article" data-context="'+context+'"><label class="full">Nom<input name="name" required maxlength="120" value="'+escape(name)+'"></label><div class="grid">'+
-    '<label>Categoria<select name="category" required>'+options(data.categories,category,'Tria una categoria')+'</select></label>'+
+    '<label>Categoria<select name="category" required>'+categoryOptions(category,'Tria una categoria')+'</select></label>'+
     '<label>Proveïdor<select name="supplier" required>'+options(data.suppliers,supplier,'Tria un proveïdor')+'</select></label>'+
     '<label>Unitat de compra<select name="unit" required>'+options(purchaseUnits(),'','Tria una unitat')+'</select></label></div></form>'+
     '<div class="actions sheet-foot">'+(!data.categories.length ? '<button type="button" data-tab="categories">Crea una categoria</button>' : data.suppliers.length ? '<button class="primary" form="quick-article">'+(context === 'order' ? 'Crea i afegeix a la comanda' : 'Crea l’article')+'</button>' :
@@ -1383,7 +1397,7 @@ function articleMergeControls() {
     '<label>Unitat de compra<select name="unit">'+options(units,'','La de cada article')+'</select></label>'+
     '<div class="bulk-submit"><button>Assigna</button></div></form>'+
     '<form id="bulk-category" class="grid"><label>Assigna una categoria<select name="category" required>'+
-      options(data.categories,'','Tria una categoria')+'<option value="-">Sense categoria</option></select></label>'+
+      categoryOptions('','Tria una categoria')+'<option value="-">Sense categoria</option></select></label>'+
     '<div class="bulk-submit"><button>Assigna</button></div></form>'+
     (selected.length > 1 ? '<form id="merge-articles" class="grid"><label>Fusiona’ls en un sol article<select name="target" required>'+
       options(selected,'','Tria l’article que es conservarà')+'</select></label><div class="bulk-submit"><button>Fusiona '+selected.length+' articles</button></div></form>' : '')+
@@ -1436,7 +1450,7 @@ const catalogKind = {suppliers:'supplier',units:'unit',categories:'category'};
 function catalogRows() {
   const isSupplier = section === 'suppliers';
   const names = {suppliers:'proveïdor',units:'unitat',categories:'categoria'};
-  const list = data[section].filter(item => item.id !== pendingUnit);
+  const list = section === 'categories' ? categoryTree() : data[section].filter(item => item.id !== pendingUnit);
   const rows = list.map(item => {
     const detail = isSupplier ? [item.contact,item.phone ? '+'+item.phone : 'Tria el contacte a WhatsApp'].filter(Boolean).join(' · ') : '';
     // Proveïdors i categories: prement el nom es mostren els seus articles. Unitats: només el nom.
@@ -1448,7 +1462,7 @@ function catalogRows() {
       ? '<button type="button" class="drag-handle" data-category-drag="'+escape(item.id)+'" title="Arrossega per canviar l’ordre" aria-label="Mou '+escape(item.name)+' (fletxes amunt i avall)">'+dragIcon+'</button>'
       : '';
     // Lliscar cap a l'esquerra elimina (va a la Paperera).
-    return swipeOpen(catalogKind[section]+':'+item.id,true,false)+'<div class="catalog-row swipe-row'+(move ? ' with-move' : '')+'"'+(move ? ' data-category-row="'+escape(item.id)+'"' : '')+'>'+move+
+    return swipeOpen(catalogKind[section]+':'+item.id,true,false)+'<div class="catalog-row swipe-row'+(move ? ' with-move' : '')+(item.depth ? ' subcategory' : '')+'"'+(move ? ' data-category-row="'+escape(item.id)+'"' : '')+'>'+move+
       (isSupplier || section === 'categories'
         ? '<button type="button" class="article-open" data-browse-articles="'+escape(item.id)+'" title="Mostra els articles de '+escape(full)+'">'+label+'</button>'
         : '<span class="catalog-name" title="'+escape(full)+'">'+label+'</span>')+
@@ -1540,7 +1554,7 @@ const byName = (a,b) => a.name.localeCompare(b.name,'ca',{sensitivity:'base'});
 
 function listFilters(mode) {
   const state = listState[mode];
-  return '<label>Categoria<select data-list-filter="category" data-list="'+mode+'">'+options(data.categories,state.category,'Totes')+
+  return '<label>Categoria<select data-list-filter="category" data-list="'+mode+'">'+categoryOptions(state.category,'Totes')+
       '<option value="-"'+(state.category === '-' ? ' selected' : '')+'>Sense categoria</option></select></label>'+
     '<label>Proveïdor<select data-list-filter="supplier" data-list="'+mode+'">'+options([...data.suppliers].sort(byName),state.supplier,'Tots')+'</select></label>';
 }
@@ -1566,7 +1580,7 @@ function articleList(mode) {
   const articles = data.articles.filter(article => {
     const ordered = mode === 'order' && byArticle.has(article.id);
     if (mode === 'order' ? article.archived && !ordered : Boolean(article.archived) !== archivedArticles) return false;
-    if (state.category && (article.category_id || '-') !== state.category) return false;
+    if (state.category && !inCategory(article.category_id,state.category)) return false;
     if (state.supplier && !withSupplier.has(article.id) && !ordered) return false;
     if (query) return matchesArticleName(article,query);
     return !(mode === 'order' && onlyOrdered && !ordered);
@@ -1638,17 +1652,41 @@ function order() {
 }
 
 function matchesOrderCategory(article) {
-  return !orderCategory || (article?.category_id || '-') === orderCategory;
+  return inCategory(article?.category_id,orderCategory);
 }
 
 function categoryName(id) {
   return byId('categories',id)?.name || 'Sense categoria';
 }
 
+// ---- Subcategories (un sol nivell: ex. Vins → Vins blancs, Escumosos) ----
+// Ordre de pantalla: cada categoria principal (en l'ordre triat) seguida de les seves subcategories.
+// Una subcategoria la categoria principal de la qual ja no hi és es mostra com a principal.
+function categoryTree() {
+  const ids = new Set(data.categories.map(item => item.id));
+  const isChild = item => item.parent_id && ids.has(item.parent_id) && item.parent_id !== item.id;
+  const result = [];
+  for (const item of data.categories) {
+    if (isChild(item)) continue;
+    result.push({...item,depth:0});
+    for (const child of data.categories) if (isChild(child) && child.parent_id === item.id) result.push({...child,depth:1});
+  }
+  return result;
+}
+// Opcions d'un desplegable de categories amb les subcategories sagnades.
+const categoryOptions = (selected, label) => '<option value="">'+label+'</option>'+categoryTree().map(item =>
+  '<option value="'+escape(item.id)+'" '+(item.id === selected ? 'selected' : '')+'>'+(item.depth ? '\u00a0\u00a0— ' : '')+escape(item.name)+'</option>').join('');
+// Un article de la subcategoria també és de la categoria principal (filtres).
+function inCategory(articleCategory, filter) {
+  if (!filter) return true;
+  const id = articleCategory || '-';
+  return id === filter || (filter !== '-' && byId('categories',id)?.parent_id === filter);
+}
+
 // Posició de la categoria en l'ordre triat a la pantalla Categories (el servidor ja les envia ordenades).
 // «Sense categoria» (o una que ja no existeix) va al final.
 function categoryRank(id) {
-  const index = data.categories.findIndex(item => item.id === id);
+  const index = categoryTree().findIndex(item => item.id === id);
   return index < 0 ? Infinity : index;
 }
 
@@ -1725,7 +1763,7 @@ function articleSheet(article, index) {
     '<section class="sheet-part"><h3>Fitxa de l’article</h3><form id="article-sheet" data-line-index="'+(line ? index : '')+'">'+
       '<label class="sheet-name">Nom<input name="name" required maxlength="120" value="'+name+'"></label>'+
       '<div class="grid sheet-pair">'+
-      '<label>Categoria<select name="category">'+options(data.categories,article.category_id,'Sense categoria')+'</select></label>'+
+      '<label>Categoria<select name="category">'+categoryOptions(article.category_id,'Sense categoria')+'</select></label>'+
       '<label>Unitat<select name="unit" required>'+options(purchaseUnits(),line?.unit || article.unit_id,'Tria una unitat')+'</select></label></div>'+
       '<label class="sheet-name">Unitat de preu<select name="priceUnit">'+options(purchaseUnits(),article.price_unit_id || '','La mateixa que la de compra')+'</select></label>'+
       '<p class="meta">Per comparar preus. Ex.: el vi es compra a caixes però el preu que compta és per ampolla.</p>'+
@@ -2590,8 +2628,9 @@ async function savePurchaseReview(form, button) {
     lines:kept.map(row => ({articleId:row.articleId, newArticle:row.newName, name:row.name, quantity:row.quantity, unit:row.unit, unitId:row.unitId,
       unitPrice:row.unitPrice, total:row.total, kg:row.kg, units:row.units, toStock:row.toStock,
       priceUnitId:rowPriceUnit(row)?.id ?? '', priceQuantity:rowPriceQuantity(row)}))};
+  let saved;
   try {
-    await api(payload);
+    saved = await api(payload);
   } catch (error) {
     if (error.status === 409 && /ja s’havia desat/.test(error.message)) duplicateAllowed = true;
     notify(error.message,true);
@@ -2608,8 +2647,18 @@ async function savePurchaseReview(form, button) {
   }
   showNextInvoice();
   render();
+  const changes = costChangesText(saved?.costChanges);
   notify('Albarà desat.'+(sent ? ' '+sent+(sent === 1 ? ' línia enviada' : ' línies enviades')+' a GestoStock.' : '')+
-    (invoiceReview ? ' Ara revisa el següent.' : ''));
+    (invoiceReview ? ' Ara revisa el següent.' : '')+changes,false,Boolean(changes));
+}
+
+// Plats de GestoStock que canvien de cost amb l'albarà desat (el servidor els calcula amb l'últim preu de cada article).
+function costChangesText(changes) {
+  if (!Array.isArray(changes) || !changes.length) return '';
+  const pct = value => value == null ? '' : Math.round(value)+'%';
+  const list = changes.slice(0,4).map(item => item.nom+' '+(item.after > item.before ? '+' : '−')+moneyFormat.format(Math.abs(item.after-item.before))+
+    (item.pctBefore != null ? ' ('+pct(item.pctBefore)+' → '+pct(item.pctAfter)+' de cost)' : ' ('+moneyFormat.format(item.after)+')')).join('; ');
+  return ' Canvia el cost '+(changes.length === 1 ? 'd’un plat' : 'de '+changes.length+' plats')+': '+list+(changes.length > 4 ? ' i '+(changes.length-4)+' més' : '')+'. Ho veuràs a GestoStock → Plats i escandalls.';
 }
 
 // ---- Preus per unitat de preu ----
@@ -3177,7 +3226,7 @@ document.addEventListener('keydown',event => {
   const handle = event.target.closest?.('[data-category-drag]');
   if (!handle || (event.key !== 'ArrowUp' && event.key !== 'ArrowDown')) return;
   event.preventDefault();
-  const ids = data.categories.map(item => item.id);
+  const ids = categoryTree().map(item => item.id);
   const from = ids.indexOf(handle.dataset.categoryDrag);
   const to = from + (event.key === 'ArrowUp' ? -1 : 1);
   if (from < 0 || to < 0 || to >= ids.length) return;
