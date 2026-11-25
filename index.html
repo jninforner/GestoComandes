@@ -5,8 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="referrer" content="no-referrer">
 <title>GestoCatalog</title>
-<link rel="icon" type="image/png" href="./icon.png?v=1.34.0">
-<link rel="apple-touch-icon" sizes="180x180" href="./icon.png?v=1.34.0">
+<link rel="icon" type="image/png" href="./icon.png?v=1.35.0">
+<link rel="apple-touch-icon" sizes="180x180" href="./icon.png?v=1.35.0">
 <style>:root{color-scheme:light;--bg:#f7f8fd;--tx:#28377e;--mu:#566598;--ln:#303f91;--surface:#fff;--soft:#f0f2fc;--border:#d4daf1;--field:#b6bfdf;--on:#fff;--red:#b42318;--green:#17734a}
 :root[data-theme=dark]{color-scheme:dark;--bg:#10152c;--tx:#e5e9ff;--mu:#adb8e5;--ln:#a1afff;--surface:#1b2447;--soft:#232f59;--border:#425080;--field:#6371a0;--on:#10152c;--red:#ff9992;--green:#84dbab}
 *{box-sizing:border-box}
@@ -342,7 +342,7 @@ details.order-category[open]>summary{border-radius:11px 11px 0 0}
 <body>
 <main>
 <header class="topbar">
-  <div class="brand"><h1>GestoCatalog</h1><div class="meta version">Versió 1.34.0<span id="sync-state" role="status"></span></div></div>
+  <div class="brand"><h1>GestoCatalog</h1><div class="meta version">Versió 1.35.0<span id="sync-state" role="status"></span></div></div>
   <div class="top-actions">
     <div class="menu-anchor">
       <button id="menu-toggle" type="button" aria-label="Menú" aria-expanded="false" aria-controls="menu-panel" hidden><span aria-hidden="true">☰</span><span class="top-action-label" aria-hidden="true">Menú</span></button>
@@ -964,6 +964,9 @@ let orderSearch = '';
 let showMatches = true;
 let creatingArticle = false;
 let invoiceReview = null;
+// Albarans llegits que esperen la seva revisió (quan se'n pugen diversos de cop).
+let invoiceQueue = [];
+let readProgress = '';
 let readingInvoice = false;
 let openPurchase = '';
 let duplicateAllowed = false;
@@ -2310,9 +2313,9 @@ function guessArticle(name) {
 function invoiceCard() {
   if (invoiceReview) return invoiceReviewForm();
   return '<section class="card invoice-card"><h3>Llegeix un albarà</h3>'+
-    '<form id="read-purchase"><label>Foto o PDF de l’albarà (fins a 8 MB)<input name="file" type="file" accept="image/jpeg,image/png,image/webp,image/heic,application/pdf,.pdf" required></label>'+
-    '<button class="primary"'+(readingInvoice ? ' disabled' : '')+'>'+(readingInvoice ? 'Llegint l’albarà…' : 'Llegeix l’albarà')+'</button>'+
-    '<p class="meta">La IA llegeix el proveïdor, la data i cada línia. Després revises què es desa.</p></form></section>';
+    '<form id="read-purchase"><label>Fotos o PDF dels albarans (fins a 20 fitxers de 8 MB)<input name="file" type="file" multiple accept="image/jpeg,image/png,image/webp,image/heic,application/pdf,.pdf" required></label>'+
+    '<button class="primary"'+(readingInvoice ? ' disabled' : '')+'>'+(readingInvoice ? 'Llegint els albarans…'+(readProgress ? ' '+readProgress : '') : 'Llegeix els albarans')+'</button>'+
+    '<p class="meta">Pots triar diversos fitxers de cop. Els fulls d’un mateix albarà s’ajunten. La IA llegeix el proveïdor, la data i cada línia, i després revises els albarans un per un.</p></form></section>';
 }
 
 function invoiceReviewForm() {
@@ -2333,13 +2336,16 @@ function invoiceReviewForm() {
       '<label class="purchase-check"><input type="checkbox" name="stock-'+i+'"'+(row.toStock ? ' checked' : '')+(row.discard ? ' disabled' : '')+'> Envia a GestoStock</label>'+
       '<button type="button" data-discard-row="'+i+'">'+(row.discard ? 'Recupera la línia' : 'Descarta')+'</button></div></fieldset>';
   }).join('');
-  return '<form id="purchase-review" class="card invoice-card"><h3>Revisa l’albarà</h3>'+
+  const total = invoiceQueue.length+1+(review.position ?? 0);
+  return '<form id="purchase-review" class="card invoice-card"><h3>Revisa l’albarà'+(total > 1 ? ' '+((review.position ?? 0)+1)+' de '+total : '')+'</h3>'+
+    (review.files?.length > 1 ? '<p class="meta">Ajuntat de '+review.files.length+' fitxers: '+review.files.map(escape).join(', ')+'.</p>' : '')+
     (review.warnings.length ? '<ul class="meta">'+review.warnings.map(item => '<li>'+escape(item)+'</li>').join('')+'</ul>' : '')+
     '<div class="grid">'+supplier+'<label>Data<input name="date" type="date" required value="'+escape(review.date)+'"></label>'+
     '<label>Número d’albarà<input name="invoiceNumber" maxlength="60" value="'+escape(review.invoiceNumber)+'"></label></div>'+
     (review.dateText && !review.date ? '<p class="meta">Data llegida: '+escape(review.dateText)+'</p>' : '')+
     rows+names+
-    '<div class="actions"><button class="primary">Desa la compra</button><button type="button" id="cancel-purchase">Cancel·la</button></div></form>';
+    '<div class="actions"><button class="primary">Desa la compra</button><button type="button" id="cancel-purchase">'+(invoiceQueue.length ? 'Salta’l (no el desis)' : 'Cancel·la')+'</button>'+
+    (invoiceQueue.length ? '<button type="button" id="cancel-all-purchases">Cancel·la tots</button>' : '')+'</div></form>';
 }
 
 const matchNotes = {previous:'Reconegut: és el que vas triar l’última vegada.', name:'Reconegut pel nom.',
@@ -2401,31 +2407,95 @@ async function fileToBase64(file) {
   return {image:btoa(binary), mimeType:file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf') ? 'application/pdf' : file.type};
 }
 
+// Converteix la resposta de la IA en una revisió (amb l'article proposat per a cada línia).
+function makeReview(result, fileName) {
+  return {...result, files:[fileName], rows:result.rows.map(row => {
+    const known = row.articleId && byId('articles',row.articleId) ? row.articleId : '';
+    const articleId = known || guessArticle(row.name);
+    const source = known ? row.matchSource || 'previous' : articleId ? 'name' : '';
+    // Si no existeix, es proposa crear-lo amb el nom que suggereix la IA (o el de l'albarà).
+    const newName = articleId ? '' : (row.suggestedName || row.name);
+    return {...row, articleId, newName, toStock:row.fish, discard:false, suggestion:{articleId, newName, source}};
+  })};
+}
+
+// Els fulls d'un mateix albarà (mateix proveïdor i número, o un full sense número del mateix proveïdor i data) s'ajunten.
+function sameInvoice(a, b) {
+  const supplier = item => item.supplierId || searchKey(item.supplierName || '');
+  if (!supplier(a) || supplier(a) !== supplier(b)) return false;
+  const number = item => searchKey(item.invoiceNumber || '').replace(/[^a-z0-9]/g,'');
+  if (number(a) && number(b)) return number(a) === number(b);
+  return !!a.date && a.date === b.date;
+}
+function mergeReviews(reviews) {
+  const merged = [];
+  for (const review of reviews) {
+    const into = merged.find(item => sameInvoice(item,review));
+    if (!into) { merged.push(review); continue; }
+    // El full amb número d'albarà sol ser el primer: les seves línies van davant.
+    const first = !into.invoiceNumber && review.invoiceNumber;
+    into.rows = first ? [...review.rows, ...into.rows] : [...into.rows, ...review.rows];
+    into.files = first ? [...review.files, ...into.files] : [...into.files, ...review.files];
+    into.warnings = [...new Set([...into.warnings, ...review.warnings])];
+    into.invoiceNumber ||= review.invoiceNumber;
+    into.date ||= review.date;
+    into.dateText ||= review.dateText;
+  }
+  // Ordre: per data i proveïdor.
+  return merged.sort((a,b) => (a.date || '9').localeCompare(b.date || '9') || (a.supplierName || '').localeCompare(b.supplierName || '','ca'))
+    .map((review,i) => ({...review, position:i}));
+}
+
+function showNextInvoice() {
+  invoiceReview = invoiceQueue.shift() ?? null;
+  duplicateAllowed = false;
+  window.scrollTo({top:0});
+}
+
 async function readPurchase(form, button) {
-  const file = form.elements.file.files[0];
-  if (!file || busy) return;
-  if (file.size > 8*1024*1024 && !file.type.startsWith('image/')) { notify('El fitxer fa més de 8 MB.',true); return; }
+  const files = [...form.elements.file.files];
+  if (!files.length || busy) return;
+  if (files.length > 20) { notify('Tria com a màxim 20 fitxers de cop.',true); return; }
+  const big = files.find(file => file.size > 8*1024*1024 && !file.type.startsWith('image/'));
+  if (big) { notify('«'+big.name+'» fa més de 8 MB.',true); return; }
   busy = true;
   readingInvoice = true;
+  let done = 0;
+  readProgress = files.length > 1 ? '(0 de '+files.length+')' : '';
   render();
-  notify('Llegint l’albarà amb IA… pot trigar uns segons.');
+  notify('Llegint '+(files.length > 1 ? files.length+' fitxers' : 'l’albarà')+' amb IA… pot trigar uns segons.');
+  const results = new Array(files.length), failed = [];
+  // Es llegeixen de 3 en 3 perquè vagi més de pressa sense saturar el servidor.
+  let next = 0;
+  const worker = async () => {
+    while (next < files.length) {
+      const i = next++;
+      try {
+        results[i] = makeReview(await api({action:'readInvoice',...await fileToBase64(files[i])}),files[i].name);
+      } catch (error) {
+        failed.push(files[i].name+': '+error.message);
+      }
+      done++;
+      if (files.length > 1) {
+        readProgress = '('+done+' de '+files.length+')';
+        const label = document.querySelector('#read-purchase button');
+        if (label) label.textContent = 'Llegint els albarans… '+readProgress;
+      }
+    }
+  };
   try {
-    const result = await api({action:'readInvoice',...await fileToBase64(file)});
-    invoiceReview = {...result, rows:result.rows.map(row => {
-      const known = row.articleId && byId('articles',row.articleId) ? row.articleId : '';
-      const articleId = known || guessArticle(row.name);
-      const source = known ? row.matchSource || 'previous' : articleId ? 'name' : '';
-      // Si no existeix, es proposa crear-lo amb el nom que suggereix la IA (o el de l'albarà).
-      const newName = articleId ? '' : (row.suggestedName || row.name);
-      return {...row, articleId, newName, toStock:row.fish, discard:false, suggestion:{articleId, newName, source}};
-    })};
-    duplicateAllowed = false;
-    notify(result.rows.length ? 'Revisa les línies i desa la compra.' : 'No s’ha trobat cap línia a l’albarà.',!result.rows.length);
-  } catch (error) {
-    notify('No s’ha pogut llegir l’albarà: '+error.message,true);
+    await Promise.all(Array.from({length:Math.min(3,files.length)},worker));
+    const reviews = mergeReviews(results.filter(Boolean).filter(review => review.rows.length || review.supplierName));
+    invoiceQueue = reviews;
+    showNextInvoice();
+    const lines = reviews.reduce((sum,review) => sum+review.rows.length,0);
+    if (failed.length) notify('No s’han pogut llegir: '+failed.join(' · '),true);
+    else if (!reviews.length || !lines) notify('No s’ha trobat cap línia als albarans.',true);
+    else notify(reviews.length > 1 ? 'S’han llegit '+reviews.length+' albarans. Revisa’ls un per un.' : 'Revisa les línies i desa la compra.');
   } finally {
     busy = false;
     readingInvoice = false;
+    readProgress = '';
     render();
   }
 }
@@ -2450,10 +2520,18 @@ async function savePurchaseReview(form, button) {
     return;
   }
   const sent = kept.filter(row => row.toStock).length;
-  invoiceReview = null;
   data = await api();
+  // Els articles nous que s'acaben de crear ja surten reconeguts als albarans que falten.
+  for (const pending of invoiceQueue) for (const row of pending.rows) {
+    if (!row.articleId && row.newName) {
+      const match = data.articles.find(item => searchKey(item.name) === searchKey(row.newName));
+      if (match) { row.articleId = match.id; row.newName = ''; row.suggestion = {articleId:match.id, newName:'', source:'name'}; }
+    }
+  }
+  showNextInvoice();
   render();
-  notify('Albarà desat.'+(sent ? ' '+sent+(sent === 1 ? ' línia enviada' : ' línies enviades')+' a GestoStock.' : ''));
+  notify('Albarà desat.'+(sent ? ' '+sent+(sent === 1 ? ' línia enviada' : ' línies enviades')+' a GestoStock.' : '')+
+    (invoiceReview ? ' Ara revisa el següent.' : ''));
 }
 
 // ---- Preus per unitat de preu ----
@@ -2742,7 +2820,13 @@ document.addEventListener('click',async event => {
     render();
   } else if (button.id === 'cancel-purchase') {
     if (!window.confirm('Vols deixar aquest albarà sense desar?')) return;
-    invoiceReview = null;
+    showNextInvoice();
+    notify(invoiceReview ? 'Albarà saltat. Revisa el següent.' : '');
+    render();
+  } else if (button.id === 'cancel-all-purchases') {
+    if (!window.confirm('Vols deixar sense desar aquest albarà i els '+invoiceQueue.length+' que falten?')) return;
+    invoiceQueue = [];
+    showNextInvoice();
     notify('');
     render();
   } else if (target.purchase) {
