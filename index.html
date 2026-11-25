@@ -5,8 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="referrer" content="no-referrer">
 <title>GestoCatalog</title>
-<link rel="icon" type="image/png" href="./icon.png?v=1.36.0">
-<link rel="apple-touch-icon" sizes="180x180" href="./icon.png?v=1.36.0">
+<link rel="icon" type="image/png" href="./icon.png?v=1.37.0">
+<link rel="apple-touch-icon" sizes="180x180" href="./icon.png?v=1.37.0">
 <style>:root{color-scheme:light;--bg:#f7f8fd;--tx:#28377e;--mu:#566598;--ln:#303f91;--surface:#fff;--soft:#f0f2fc;--border:#d4daf1;--field:#b6bfdf;--on:#fff;--red:#b42318;--green:#17734a}
 :root[data-theme=dark]{color-scheme:dark;--bg:#10152c;--tx:#e5e9ff;--mu:#adb8e5;--ln:#a1afff;--surface:#1b2447;--soft:#232f59;--border:#425080;--field:#6371a0;--on:#10152c;--red:#ff9992;--green:#84dbab}
 *{box-sizing:border-box}
@@ -348,7 +348,7 @@ details.order-category[open]>summary{border-radius:11px 11px 0 0}
 <body>
 <main>
 <header class="topbar">
-  <div class="brand"><h1>GestoCatalog</h1><div class="meta version">Versió 1.36.0<span id="sync-state" role="status"></span></div></div>
+  <div class="brand"><h1>GestoCatalog</h1><div class="meta version">Versió 1.37.0<span id="sync-state" role="status"></span></div></div>
   <div class="top-actions">
     <div class="menu-anchor">
       <button id="menu-toggle" type="button" aria-label="Menú" aria-expanded="false" aria-controls="menu-panel" hidden><span aria-hidden="true">☰</span><span class="top-action-label" aria-hidden="true">Menú</span></button>
@@ -2334,7 +2334,8 @@ function invoiceReviewForm() {
       '<div class="purchase-article"><span class="field-label">Article</span><button type="button" class="article-pick" data-pick-row="'+i+'"'+(row.discard ? ' disabled' : '')+'>'+
         '<span>'+(article ? escape(article.name) : row.newName ? 'Nou: '+escape(row.newName) : '<span class="meta">Tria l’article</span>')+'</span><span class="article-pick-action">Canvia</span></button></div>'+
       '<label>Quantitat<input name="quantity-'+i+'" type="number" step="any" inputmode="decimal" value="'+escape(row.quantity ?? '')+'"'+(row.discard ? ' disabled' : '')+'></label>'+
-      '<label>Unitat<input name="unit-'+i+'" maxlength="20" value="'+escape(row.unit)+'"'+(row.discard ? ' disabled' : '')+'></label>'+
+      '<label>Unitat<select name="unit-'+i+'"'+(row.discard ? ' disabled' : '')+'>'+options(purchaseUnits(),row.unitId,'Tria la unitat')+'</select>'+
+        (row.unitRead && !row.unitId ? '<span class="meta">A l’albarà: «'+escape(row.unitRead)+'»</span>' : '')+'</label>'+
       '<label>Preu unitari (€)<input name="price-'+i+'" type="number" step="any" inputmode="decimal" value="'+escape(row.unitPrice ?? '')+'"'+(row.discard ? ' disabled' : '')+'></label>'+
       '<label>Import (€)<input name="total-'+i+'" type="number" step="any" inputmode="decimal" value="'+escape(row.total ?? '')+'"'+(row.discard ? ' disabled' : '')+'></label></div>'+
       '<div class="purchase-price grid" data-price-row="'+i+'">'+priceRow(row,i)+'</div>'+
@@ -2375,7 +2376,8 @@ function syncInvoiceReview(form) {
     if (row.discard) return;
     const number = name => field(name).value === '' ? null : Number(field(name).value);
     row.quantity = number('quantity-'+i);
-    row.unit = field('unit-'+i).value.trim();
+    row.unitId = field('unit-'+i).value;
+    row.unit = byId('units',row.unitId)?.name ?? '';
     row.unitPrice = number('price-'+i);
     row.total = number('total-'+i);
     row.toStock = field('stock-'+i).checked;
@@ -2468,7 +2470,10 @@ function makeReview(result, fileName) {
     const source = known ? row.matchSource || 'previous' : articleId ? 'name' : '';
     // Si no existeix, es proposa crear-lo amb el nom que suggereix la IA (o el de l'albarà).
     const newName = articleId ? '' : (row.suggestedName || row.name);
-    return {...row, articleId, newName, toStock:row.fish, discard:false, suggestion:{articleId, newName, source}};
+    // La unitat es tria d'entre les del catàleg: es proposa la que correspon al text de l'albarà.
+    const unit = purchaseUnits().find(item => unitMatches(row.unit,item));
+    return {...row, articleId, newName, unitRead:row.unit, unitId:unit?.id ?? '', unit:unit?.name ?? '',
+      toStock:row.fish, discard:false, suggestion:{articleId, newName, source}};
   })};
 }
 
@@ -2560,10 +2565,12 @@ async function savePurchaseReview(form, button) {
   const kept = review.rows.filter(row => !row.discard);
   if (!kept.length) { notify('Totes les línies estan descartades. Cancel·la la lectura o recupera’n alguna.',true); return; }
   const missing = kept.findIndex(row => !row.articleId && !row.newName);
-  if (missing >= 0) { notify('A la línia «'+kept[missing].name+'» li falta l’article.',true); form.elements['article-'+review.rows.indexOf(kept[missing])]?.focus(); return; }
+  if (missing >= 0) { notify('A la línia «'+kept[missing].name+'» li falta l’article.',true); return; }
+  const noUnit = kept.find(row => !row.unitId);
+  if (noUnit) { notify('A la línia «'+noUnit.name+'» li falta la unitat.',true); form.elements['unit-'+review.rows.indexOf(noUnit)]?.focus(); return; }
   const payload = {action:'savePurchase', supplierId:review.supplierId, supplierName:review.supplierId ? '' : review.supplierName,
     date:review.date, invoiceNumber:review.invoiceNumber.trim(), force:duplicateAllowed,
-    lines:kept.map(row => ({articleId:row.articleId, newArticle:row.newName, name:row.name, quantity:row.quantity, unit:row.unit,
+    lines:kept.map(row => ({articleId:row.articleId, newArticle:row.newName, name:row.name, quantity:row.quantity, unit:row.unit, unitId:row.unitId,
       unitPrice:row.unitPrice, total:row.total, kg:row.kg, units:row.units, toStock:row.toStock,
       priceQuantity:row.articleId ? rowPriceQuantity(row) : row.quantity}))};
   try {
@@ -2606,7 +2613,7 @@ const priceOf = line => line.total !== null && line.total !== undefined ? line.t
   line.unitPrice !== null && line.unitPrice !== undefined && line.quantity !== null ? line.unitPrice*line.quantity : null;
 // Quantes unitats de preu porta cada unitat de l'albarà (ex.: 6 ampolles per caixa). 1 si és la mateixa unitat.
 function samePriceUnit(row, unit) {
-  return unitMatches(row.unit,unit);
+  return row.unitId ? row.unitId === unit.id : unitMatches(row.unit,unit);
 }
 function defaultPerPack(row, unit) {
   if (!row.quantity) return null;
