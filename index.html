@@ -5,8 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="referrer" content="no-referrer">
 <title>GestoCatalog</title>
-<link rel="icon" type="image/png" href="./icon.png?v=1.35.1">
-<link rel="apple-touch-icon" sizes="180x180" href="./icon.png?v=1.35.1">
+<link rel="icon" type="image/png" href="./icon.png?v=1.36.0">
+<link rel="apple-touch-icon" sizes="180x180" href="./icon.png?v=1.36.0">
 <style>:root{color-scheme:light;--bg:#f7f8fd;--tx:#28377e;--mu:#566598;--ln:#303f91;--surface:#fff;--soft:#f0f2fc;--border:#d4daf1;--field:#b6bfdf;--on:#fff;--red:#b42318;--green:#17734a}
 :root[data-theme=dark]{color-scheme:dark;--bg:#10152c;--tx:#e5e9ff;--mu:#adb8e5;--ln:#a1afff;--surface:#1b2447;--soft:#232f59;--border:#425080;--field:#6371a0;--on:#10152c;--red:#ff9992;--green:#84dbab}
 *{box-sizing:border-box}
@@ -201,12 +201,18 @@ img,video,canvas{max-width:100%;height:auto}
 .purchase-row legend{font-weight:650;padding:0 4px}
 .purchase-row.is-discarded{opacity:.6}
 .purchase-row .grid{grid-template-columns:repeat(auto-fit,minmax(110px,1fr))}
-.purchase-article{grid-column:1/-1}
+.purchase-article{grid-column:1/-1;display:grid;gap:4px;font-size:14px;color:var(--mu)}
+.article-pick{font-size:16px;color:var(--tx);display:flex;justify-content:space-between;align-items:center;gap:10px;width:100%;text-align:left;font-weight:600}
+.article-pick-action{color:var(--ln);font-weight:650;white-space:nowrap}
+.pick-results{display:flex;flex-direction:column;gap:6px;margin-top:12px;max-height:55vh;overflow:auto}
+.pick-results button{display:flex;flex-direction:column;align-items:flex-start;gap:2px;text-align:left;width:100%}
+.pick-results button[aria-current]{border-color:var(--ln);border-width:2px}
+.pick-new{font-weight:650}
 .purchase-row-actions{display:flex;flex-wrap:wrap;align-items:center;gap:10px;justify-content:space-between}
 .purchase-row-actions .meta{flex:1 1 200px;margin:0}
 .match-tag{display:inline-block;font-size:.8em;font-weight:650;border-radius:999px;padding:1px 8px;margin-right:2px}
-.match-tag.is-existing{background:#e3f4e8;color:#1e6b3a}
-.match-tag.is-new{background:#fff1d6;color:#8a5a00}
+.match-tag.is-existing{background:var(--soft);color:var(--green)}
+.match-tag.is-new{background:var(--soft);color:#b26a00}
 .purchase-check{display:flex;align-items:center;gap:6px;color:var(--tx)}
 .purchase-check input{width:auto;min-height:0}
 .purchase-head{width:100%;flex-direction:column;align-items:flex-start;gap:2px;border:0;background:transparent;padding:0;text-align:left}
@@ -342,7 +348,7 @@ details.order-category[open]>summary{border-radius:11px 11px 0 0}
 <body>
 <main>
 <header class="topbar">
-  <div class="brand"><h1>GestoCatalog</h1><div class="meta version">Versió 1.35.1<span id="sync-state" role="status"></span></div></div>
+  <div class="brand"><h1>GestoCatalog</h1><div class="meta version">Versió 1.36.0<span id="sync-state" role="status"></span></div></div>
   <div class="top-actions">
     <div class="menu-anchor">
       <button id="menu-toggle" type="button" aria-label="Menú" aria-expanded="false" aria-controls="menu-panel" hidden><span aria-hidden="true">☰</span><span class="top-action-label" aria-hidden="true">Menú</span></button>
@@ -2320,13 +2326,13 @@ function invoiceCard() {
 
 function invoiceReviewForm() {
   const review = invoiceReview;
-  const names = '<datalist id="purchase-articles">'+data.articles.filter(item => !item.archived).map(item => '<option value="'+escape(item.name)+'">').join('')+'</datalist>';
   const supplier = '<label>Proveïdor<select name="supplierId">'+options(data.suppliers,review.supplierId,review.supplierName ? 'Nou: '+review.supplierName : 'Tria un proveïdor')+'</select></label>';
   const rows = review.rows.map((row,i) => {
     const article = byId('articles',row.articleId);
     return '<fieldset class="purchase-row'+(row.discard ? ' is-discarded' : '')+'" data-row="'+i+'"><legend>'+escape(row.name)+(row.uncertain ? ' <span class="error">· revisa-la</span>' : '')+'</legend>'+
       '<div class="grid">'+
-      '<label class="purchase-article">Article<input name="article-'+i+'" list="purchase-articles" value="'+escape(article?.name ?? row.newName ?? '')+'" placeholder="Tria’l o escriu-ne un de nou"'+(row.discard ? ' disabled' : '')+'></label>'+
+      '<div class="purchase-article"><span class="field-label">Article</span><button type="button" class="article-pick" data-pick-row="'+i+'"'+(row.discard ? ' disabled' : '')+'>'+
+        '<span>'+(article ? escape(article.name) : row.newName ? 'Nou: '+escape(row.newName) : '<span class="meta">Tria l’article</span>')+'</span><span class="article-pick-action">Canvia</span></button></div>'+
       '<label>Quantitat<input name="quantity-'+i+'" type="number" step="any" inputmode="decimal" value="'+escape(row.quantity ?? '')+'"'+(row.discard ? ' disabled' : '')+'></label>'+
       '<label>Unitat<input name="unit-'+i+'" maxlength="20" value="'+escape(row.unit)+'"'+(row.discard ? ' disabled' : '')+'></label>'+
       '<label>Preu unitari (€)<input name="price-'+i+'" type="number" step="any" inputmode="decimal" value="'+escape(row.unitPrice ?? '')+'"'+(row.discard ? ' disabled' : '')+'></label>'+
@@ -2343,7 +2349,7 @@ function invoiceReviewForm() {
     '<div class="grid">'+supplier+'<label>Data<input name="date" type="date" required value="'+escape(review.date)+'"></label>'+
     '<label>Número d’albarà<input name="invoiceNumber" maxlength="60" value="'+escape(review.invoiceNumber)+'"></label></div>'+
     (review.dateText && !review.date ? '<p class="meta">Data llegida: '+escape(review.dateText)+'</p>' : '')+
-    rows+names+
+    rows+
     '<div class="actions"><button class="primary">Desa la compra</button><button type="button" id="cancel-purchase">'+(invoiceQueue.length ? 'Salta’l (no el desis)' : 'Cancel·la')+'</button>'+
     (invoiceQueue.length ? '<button type="button" id="cancel-all-purchases">Cancel·la tots</button>' : '')+'</div></form>';
 }
@@ -2354,8 +2360,8 @@ function articleHint(row) {
   if (row.discard) return 'Línia descartada: no es desarà.';
   const suggested = row.suggestion && row.suggestion.articleId === row.articleId && row.suggestion.newName === row.newName;
   if (row.articleId) return '<span class="match-tag is-existing">Article existent</span> '+(suggested && matchNotes[row.suggestion.source] || 'Es desarà amb aquest article.');
-  if (row.newName) return '<span class="match-tag is-new">Article nou</span> No és al catàleg: es crearà «'+escape(row.newName)+'». Si ja el tens amb un altre nom, tria’l a la llista.';
-  return 'Tria l’article o escriu el nom d’un de nou.';
+  if (row.newName) return '<span class="match-tag is-new">Article nou</span> No és al catàleg: es crearà «'+escape(row.newName)+'». Si ja el tens amb un altre nom, prem «Canvia» i tria’l.';
+  return 'Prem «Canvia» per triar l’article del catàleg o crear-ne un de nou.';
 }
 
 // Llegeix els valors del formulari de revisió a invoiceReview (per no perdre’ls en tornar a pintar).
@@ -2367,10 +2373,6 @@ function syncInvoiceReview(form) {
   invoiceReview.invoiceNumber = field('invoiceNumber').value;
   invoiceReview.rows.forEach((row,i) => {
     if (row.discard) return;
-    const text = field('article-'+i).value.trim();
-    const match = data.articles.find(item => searchKey(item.name) === searchKey(text));
-    row.articleId = match?.id ?? '';
-    row.newName = match || !text ? '' : text;
     const number = name => field(name).value === '' ? null : Number(field(name).value);
     row.quantity = number('quantity-'+i);
     row.unit = field('unit-'+i).value.trim();
@@ -2406,6 +2408,57 @@ async function fileToBase64(file) {
   for (let i = 0; i < bytes.length; i += 32768) binary += String.fromCharCode(...bytes.subarray(i,i+32768));
   return {image:btoa(binary), mimeType:file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf') ? 'application/pdf' : file.type};
 }
+
+// ---- Triar l'article d'una línia de l'albarà (diàleg amb cercador) ----
+let pickRow = -1;
+function openArticlePicker(i) {
+  syncInvoiceReview(document.querySelector('#purchase-review'));
+  pickRow = i;
+  const row = invoiceReview.rows[i];
+  let dialog = document.querySelector('#order-dialog');
+  if (!dialog) {
+    dialog = document.createElement('dialog');
+    dialog.id = 'order-dialog';
+    dialog.setAttribute('aria-labelledby','order-dialog-title');
+    dialog.addEventListener('close',() => { sheetId = ''; });
+    document.querySelector('#workspace').append(dialog);
+  }
+  sheetId = '';
+  dialog.innerHTML = '<div class="sheet-head"><h2 id="order-dialog-title">Quin article és?</h2><button type="button" id="close-order-dialog" aria-label="Tanca">✕</button></div>'+
+    '<p class="meta">A l’albarà: '+escape(row.name)+'</p>'+
+    '<label>Cerca al catàleg o escriu el nom d’un de nou<input id="pick-search" type="search" autocomplete="off" value="'+escape(row.newName || '')+'"></label>'+
+    '<div id="pick-results" class="pick-results">'+pickerResults(row.newName || '')+'</div>';
+  if (!dialog.open) dialog.showModal();
+}
+function pickerResults(text) {
+  const row = invoiceReview.rows[pickRow];
+  const key = searchKey(text);
+  const words = key.split(/\s+/).filter(Boolean);
+  const all = data.articles.filter(item => !item.archived);
+  const found = words.length ? all.filter(item => { const name = searchKey(item.name); return words.every(word => name.includes(word)); }) : all;
+  // L'article proposat (i el triat ara) surten primer.
+  const first = [row.articleId, row.suggestion?.articleId].filter(Boolean);
+  found.sort((a,b) => (first.includes(b.id)-first.includes(a.id)) || a.name.localeCompare(b.name,'ca'));
+  const exact = all.some(item => searchKey(item.name) === key);
+  const create = text.trim() && !exact ? '<button type="button" class="pick-new" data-pick-new="'+escape(text.trim())+'">＋ Crea l’article nou «'+escape(text.trim())+'»</button>' : '';
+  const list = found.slice(0,60).map(item => '<button type="button" data-pick-article="'+escape(item.id)+'"'+(item.id === row.articleId ? ' aria-current="true"' : '')+'>'+
+    '<strong>'+escape(item.name)+'</strong><span class="meta">'+escape(categoryName(item.category_id))+(item.id === row.suggestion?.articleId ? ' · proposat' : '')+(item.id === row.articleId ? ' · triat' : '')+'</span></button>').join('');
+  return create+(list || '<p class="meta">Cap article del catàleg coincideix.</p>')+(found.length > 60 ? '<p class="meta">Escriu més per veure’n menys.</p>' : '');
+}
+function choosePickedArticle(articleId, newName) {
+  const row = invoiceReview.rows[pickRow];
+  if (row.articleId !== articleId) row.perPack = null;
+  row.articleId = articleId;
+  row.newName = articleId ? '' : newName;
+  document.querySelector('#order-dialog')?.close();
+  pickRow = -1;
+  render();
+}
+document.addEventListener('input',event => {
+  if (event.target.id !== 'pick-search' || pickRow < 0) return;
+  const box = document.querySelector('#pick-results');
+  if (box) box.innerHTML = pickerResults(event.target.value);
+});
 
 // Converteix la resposta de la IA en una revisió (amb l'article proposat per a cada línia).
 function makeReview(result, fileName) {
@@ -2814,6 +2867,12 @@ document.addEventListener('click',async event => {
     const lines = data.draft.lines.map((line,i) => i === position ? {...line,quantity:Math.round((line.quantity+Number(target.step))*1000)/1000} : line)
       .filter(line => line.quantity > 0);
     await saveDraft(combineDraftLines(lines),button);
+  } else if (target.pickRow) {
+    openArticlePicker(Number(target.pickRow));
+  } else if (target.pickArticle) {
+    choosePickedArticle(target.pickArticle,'');
+  } else if (target.pickNew) {
+    choosePickedArticle('',target.pickNew);
   } else if (target.discardRow) {
     syncInvoiceReview(button.form);
     const row = invoiceReview.rows[Number(target.discardRow)];
